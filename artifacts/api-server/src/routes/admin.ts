@@ -29,7 +29,7 @@ router.get("/admin/users", requireAdmin, async (req, res) => {
     })));
   } catch (err) {
     req.log.error({ err }, "Failed to list users");
-    res.status(500).json({ error: "Server error" });
+    return res.status(500).json({ error: "Server error" });
   }
 });
 
@@ -59,7 +59,7 @@ router.post("/admin/users/:id/toggle-admin", requireAdmin, async (req, res) => {
     });
   } catch (err) {
     req.log.error({ err }, "Failed to toggle admin");
-    res.status(500).json({ error: "Server error" });
+    return res.status(500).json({ error: "Server error" });
   }
 });
 
@@ -93,7 +93,7 @@ router.post("/admin/users/:id/toggle-ban", requireAdmin, async (req, res) => {
     });
   } catch (err) {
     req.log.error({ err }, "Failed to toggle ban");
-    res.status(500).json({ error: "Server error" });
+    return res.status(500).json({ error: "Server error" });
   }
 });
 
@@ -111,7 +111,7 @@ router.post("/categories", requireAdmin, async (req, res) => {
     res.status(201).json({ id: cat.id, name: cat.name, description: cat.description, slug: cat.slug, icon: cat.icon ?? null, postCount: cat.postCount });
   } catch (err) {
     req.log.error({ err }, "Failed to create category");
-    res.status(500).json({ error: "Server error" });
+    return res.status(500).json({ error: "Server error" });
   }
 });
 
@@ -133,7 +133,7 @@ router.put("/categories/:id", requireAdmin, async (req, res) => {
     res.json({ id: cat.id, name: cat.name, description: cat.description, slug: cat.slug, icon: cat.icon ?? null, postCount: cat.postCount });
   } catch (err) {
     req.log.error({ err }, "Failed to update category");
-    res.status(500).json({ error: "Server error" });
+    return res.status(500).json({ error: "Server error" });
   }
 });
 
@@ -147,7 +147,7 @@ router.delete("/categories/:id", requireAdmin, async (req, res) => {
     res.status(204).send();
   } catch (err) {
     req.log.error({ err }, "Failed to delete category");
-    res.status(500).json({ error: "Server error" });
+    return res.status(500).json({ error: "Server error" });
   }
 });
 
@@ -184,7 +184,7 @@ router.patch("/posts/:id", requireAdmin, async (req, res) => {
     });
   } catch (err) {
     req.log.error({ err }, "Failed to update post");
-    res.status(500).json({ error: "Server error" });
+    return res.status(500).json({ error: "Server error" });
   }
 });
 
@@ -203,7 +203,7 @@ router.delete("/posts/:id", requireAdmin, async (req, res) => {
     res.status(204).send();
   } catch (err) {
     req.log.error({ err }, "Failed to delete post");
-    res.status(500).json({ error: "Server error" });
+    return res.status(500).json({ error: "Server error" });
   }
 });
 
@@ -222,7 +222,7 @@ router.delete("/replies/:id", requireAdmin, async (req, res) => {
     res.status(204).send();
   } catch (err) {
     req.log.error({ err }, "Failed to delete reply");
-    res.status(500).json({ error: "Server error" });
+    return res.status(500).json({ error: "Server error" });
   }
 });
 

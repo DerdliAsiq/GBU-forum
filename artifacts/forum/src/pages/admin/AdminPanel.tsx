@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAuth } from "@workspace/replit-auth-web";
+import { useAuth } from "@/lib/auth";
 import { Link, useLocation } from "wouter";
 import { 
   useListAdminUsers, 
@@ -20,6 +20,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Shield, ShieldAlert, AlertCircle, Edit, Trash2, Pin, Plus, Users, Folder, MessageSquare, Info, Ban, ShieldCheck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatDate } from "@/lib/date";
+import { apiFetch } from "@/lib/api";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -170,9 +171,8 @@ function UsersTab() {
   const handleToggleBan = async (id: string, currentBanned: boolean) => {
     setBanPending(id);
     try {
-      const res = await fetch(`/api/admin/users/${id}/toggle-ban`, {
+      const res = await apiFetch(`/api/admin/users/${id}/toggle-ban`, {
         method: "POST",
-        credentials: "include",
       });
       if (res.ok) {
         queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
@@ -521,7 +521,7 @@ function PostsTab() {
 
   if (isLoading) return <TableSkeleton />;
 
-  const posts = postsData?.data || [];
+  const posts = postsData?.posts || [];
 
   return (
     <div className="bg-white rounded-lg shadow-sm border overflow-hidden">

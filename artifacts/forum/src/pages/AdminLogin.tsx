@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { GraduationCap, Shield, Eye, EyeOff, Lock } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { apiFetch } from "@/lib/api";
 
 export default function AdminLogin() {
   const [, setLocation] = useLocation();
@@ -18,11 +19,10 @@ export default function AdminLogin() {
 
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/local-login", {
+      const res = await apiFetch("/api/auth/local-login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
-        credentials: "include",
       });
 
       if (res.ok) {

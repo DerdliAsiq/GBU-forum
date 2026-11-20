@@ -1,14 +1,11 @@
-import * as oidc from "openid-client";
 import { type Request, type Response, type NextFunction } from "express";
 import type { AuthUser } from "@workspace/api-zod";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import {
   clearSession,
-  getOidcConfig,
   getSessionId,
   getSession,
-  updateSession,
   type SessionData,
 } from "../lib/auth";
 
@@ -24,39 +21,6 @@ declare global {
     export interface AuthedRequest {
       user: User;
     }
-  }
-}
-
-async function refreshIfExpired(
-  sid: string,
-  session: SessionData,
-): Promise<SessionData> {
-  const now = Math.floor(Date.now() / 1000);
-
-  if (!session.expires_at || now <= session.expires_at) return session;
-
-  if (session.localAdmin) return session;
-
-  if (!session.refresh_token) {
-    const updated = { ...session, expires_at: undefined };
-    await updateSession(sid, updated);
-    return updated;
-  }
-
-  try {
-    const config = await getOidcConfig();
-    const tokens = await oidc.refreshTokenGrant(config, session.refresh_token);
-    session.access_token = tokens.access_token;
-    session.refresh_token = tokens.refresh_token ?? session.refresh_token;
-    session.expires_at = tokens.expiresIn()
-      ? now + tokens.expiresIn()!
-      : session.expires_at;
-    await updateSession(sid, session);
-    return session;
-  } catch {
-    const updated = { ...session, access_token: "", refresh_token: undefined, expires_at: undefined };
-    await updateSession(sid, updated);
-    return updated;
   }
 }
 
@@ -82,12 +46,10 @@ export async function authMiddleware(
     return;
   }
 
-  const refreshed = await refreshIfExpired(sid, session);
-
   const [dbUser] = await db
     .select()
     .from(usersTable)
-    .where(eq(usersTable.id, refreshed.user.id));
+    .where(eq(usersTable.id, session.user.id));
 
   if (dbUser?.isBanned) {
     await clearSession(res, sid);
@@ -96,11 +58,11 @@ export async function authMiddleware(
   }
 
   req.user = {
-    ...refreshed.user,
-    isAdmin: dbUser?.isAdmin ?? refreshed.user.isAdmin,
+    ...session.user,
+    isAdmin: dbUser?.isAdmin ?? session.user.isAdmin,
     username: dbUser?.username ?? null,
     displayName: dbUser?.displayName ?? null,
-    profileImageUrl: dbUser?.profileImageUrl ?? refreshed.user.profileImageUrl,
+    profileImageUrl: dbUser?.profileImageUrl ?? session.user.profileImageUrl,
     isBanned: dbUser?.isBanned ?? false,
   };
 

@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "incremental": true,
+    "tsBuildInfoFile": ".tsbuildinfo",
+    "outDir": "dist",
+    "rootDir": "src",
+    "composite": true,
+    "lib": ["es2022"],
+    "types": []
+  },
+  "include": ["src"],
+  "references": []
+}

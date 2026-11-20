@@ -26,8 +26,8 @@ export default function PostDetail() {
   const { toast } = useToast();
   const repliesEndRef = useRef<HTMLDivElement>(null);
 
-  const { data: post, isLoading: postLoading } = useGetPost(id, { query: { enabled: !!id } });
-  const { data: replies, isLoading: repliesLoading } = useListReplies(id, { query: { enabled: !!id } });
+  const { data: post, isLoading: postLoading } = useGetPost(id, { query: { queryKey: getGetPostQueryKey(id), enabled: !!id } });
+  const { data: replies, isLoading: repliesLoading } = useListReplies(id, { query: { queryKey: getListRepliesQueryKey(id), enabled: !!id } });
   const createReply = useCreateReply();
 
   const form = useForm<z.infer<typeof replySchema>>({

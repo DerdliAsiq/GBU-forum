@@ -2,8 +2,11 @@ import { Router } from "express";
 import { db, repliesTable, postsTable } from "@workspace/db";
 import { CreateReplyBody } from "@workspace/api-zod";
 import { eq, asc, sql } from "drizzle-orm";
+import { rateLimit } from "../lib/rateLimit";
+import { isReservedAuthorName, RESERVED_AUTHOR_ERROR } from "../lib/authorName";
 
 const router = Router();
+const createReplyLimiter = rateLimit(10, 60 * 1000);
 
 router.get("/posts/:id/replies", async (req, res) => {
   const postId = parseInt(req.params.id, 10);
@@ -24,12 +27,12 @@ router.get("/posts/:id/replies", async (req, res) => {
     })));
   } catch (err) {
     req.log.error({ err }, "Failed to list replies");
-    res.status(500).json({ error: "Server error" });
+    return res.status(500).json({ error: "Server error" });
   }
 });
 
-router.post("/posts/:id/replies", async (req, res) => {
-  const postId = parseInt(req.params.id, 10);
+router.post("/posts/:id/replies", createReplyLimiter, async (req, res) => {
+  const postId = parseInt(String(req.params.id), 10);
   if (isNaN(postId)) return res.status(400).json({ error: "Invalid id" });
 
   const parsed = CreateReplyBody.safeParse(req.body);
@@ -38,6 +41,9 @@ router.post("/posts/:id/replies", async (req, res) => {
   }
 
   const { content, authorName } = parsed.data;
+  if (authorName && !req.user?.isAdmin && isReservedAuthorName(authorName)) {
+    return res.status(400).json({ error: RESERVED_AUTHOR_ERROR });
+  }
   try {
     const [post] = await db.select({ id: postsTable.id }).from(postsTable).where(eq(postsTable.id, postId));
     if (!post) return res.status(404).json({ error: "Post not found" });
@@ -64,7 +70,7 @@ router.post("/posts/:id/replies", async (req, res) => {
     });
   } catch (err) {
     req.log.error({ err }, "Failed to create reply");
-    res.status(500).json({ error: "Server error" });
+    return res.status(500).json({ error: "Server error" });
   }
 });
 

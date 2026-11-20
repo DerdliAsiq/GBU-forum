@@ -40,7 +40,7 @@ router.get("/categories/:id", async (req, res) => {
     });
   } catch (err) {
     req.log.error({ err }, "Failed to get category");
-    res.status(500).json({ error: "Server error" });
+    return res.status(500).json({ error: "Server error" });
   }
 });
 

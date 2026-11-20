@@ -1,0 +1,29 @@
+# Single web service: the API also serves the built forum SPA from the same
+# origin, so no CORS or cross-site cookie setup is needed. Database: Supabase
+# (set DATABASE_URL to its Session pooler connection string in the dashboard).
+services:
+  - type: web
+    name: gbu-forum
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: >-
+      corepack enable && corepack prepare pnpm@12.16.1 --activate &&
+      pnpm install --frozen-lockfile &&
+      pnpm --filter @workspace/api-server run build &&
+      pnpm --filter @workspace/forum run build
+    startCommand: node --enable-source-maps artifacts/api-server/dist/index.mjs
+    healthCheckPath: /api/healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: NODE_ENV
+        value: production
+      - key: TRUST_PROXY
+        value: "1"
+      - key: DATABASE_URL
+        sync: false
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        generateValue: true

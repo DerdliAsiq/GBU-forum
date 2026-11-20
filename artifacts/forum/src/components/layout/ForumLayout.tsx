@@ -1,7 +1,7 @@
 import React from "react";
 import { Link } from "wouter";
 import { GraduationCap, LogOut, Shield, Settings } from "lucide-react";
-import { useAuth } from "@workspace/replit-auth-web";
+import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -87,7 +87,7 @@ export function ForumLayout({ children }: { children: React.ReactNode }) {
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" className="relative h-9 w-9 rounded-full p-0 hover:bg-white/20">
                       <Avatar className="h-9 w-9" style={{ border: "2px solid rgba(255,255,255,0.5)" }}>
-                        <AvatarImage src={user?.profileImageUrl} alt={displayName} />
+                        <AvatarImage src={user?.profileImageUrl ?? undefined} alt={displayName} />
                         <AvatarFallback
                           className="text-xs font-bold"
                           style={{ background: "#B8821E", color: "#fff" }}

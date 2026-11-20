@@ -2,8 +2,11 @@ import { Router } from "express";
 import { db, postsTable, categoriesTable } from "@workspace/db";
 import { CreatePostBody } from "@workspace/api-zod";
 import { eq, desc, sql } from "drizzle-orm";
+import { rateLimit } from "../lib/rateLimit";
+import { isReservedAuthorName, RESERVED_AUTHOR_ERROR } from "../lib/authorName";
 
 const router = Router();
+const createPostLimiter = rateLimit(5, 60 * 1000);
 
 router.get("/posts", async (req, res) => {
   try {
@@ -66,16 +69,19 @@ router.get("/posts", async (req, res) => {
     });
   } catch (err) {
     req.log.error({ err }, "Failed to list posts");
-    res.status(500).json({ error: "Server error" });
+    return res.status(500).json({ error: "Server error" });
   }
 });
 
-router.post("/posts", async (req, res) => {
+router.post("/posts", createPostLimiter, async (req, res) => {
   const parsed = CreatePostBody.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "Validation error", details: parsed.error.issues });
   }
   const { categoryId, title, content, authorName } = parsed.data;
+  if (authorName && !req.user?.isAdmin && isReservedAuthorName(authorName)) {
+    return res.status(400).json({ error: RESERVED_AUTHOR_ERROR });
+  }
   try {
     const [cat] = await db.select({ id: categoriesTable.id }).from(categoriesTable).where(eq(categoriesTable.id, categoryId));
     if (!cat) return res.status(400).json({ error: "Category not found" });
@@ -117,7 +123,7 @@ router.post("/posts", async (req, res) => {
     });
   } catch (err) {
     req.log.error({ err }, "Failed to create post");
-    res.status(500).json({ error: "Server error" });
+    return res.status(500).json({ error: "Server error" });
   }
 });
 
@@ -149,7 +155,7 @@ router.get("/posts/recent", async (req, res) => {
     })));
   } catch (err) {
     req.log.error({ err }, "Failed to list recent posts");
-    res.status(500).json({ error: "Server error" });
+    return res.status(500).json({ error: "Server error" });
   }
 });
 
@@ -188,7 +194,7 @@ router.get("/posts/:id", async (req, res) => {
     });
   } catch (err) {
     req.log.error({ err }, "Failed to get post");
-    res.status(500).json({ error: "Server error" });
+    return res.status(500).json({ error: "Server error" });
   }
 });
 

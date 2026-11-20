@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from "react";
-import { useAuth } from "@workspace/replit-auth-web";
+import { useAuth } from "@/lib/auth";
 import { Link } from "wouter";
 import { ChevronLeft, Camera, User, Save, Check } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
+import { apiFetch } from "@/lib/api";
 
 export default function Settings() {
   const { user, isLoading, isAuthenticated } = useAuth();
@@ -41,10 +42,9 @@ export default function Settings() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const res = await fetch("/api/profile", {
+      const res = await apiFetch("/api/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({
           displayName: displayName || undefined,
           username: username || undefined,

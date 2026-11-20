@@ -19,7 +19,7 @@ router.get("/profile", async (req, res) => {
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.user.id));
   if (!user) return res.status(404).json({ error: "User not found" });
 
-  res.json({
+  return res.json({
     id: user.id,
     email: user.email,
     username: user.username,
@@ -68,7 +68,7 @@ router.put("/profile", async (req, res) => {
 
   if (!updated) return res.status(404).json({ error: "User not found" });
 
-  res.json({
+  return res.json({
     id: updated.id,
     email: updated.email,
     username: updated.username,

@@ -1,5 +1,5 @@
 import { useParams, Link } from "wouter";
-import { useGetCategory, useListPosts } from "@workspace/api-client-react";
+import { useGetCategory, useListPosts, getGetCategoryQueryKey, getListPostsQueryKey } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MessageCircle, Eye, Pin, ChevronLeft, PlusCircle } from "lucide-react";
@@ -9,8 +9,8 @@ export default function Category() {
   const params = useParams();
   const id = Number(params.id);
 
-  const { data: category, isLoading: categoryLoading } = useGetCategory(id, { query: { enabled: !!id } });
-  const { data: postList, isLoading: postsLoading } = useListPosts({ categoryId: id }, { query: { enabled: !!id } });
+  const { data: category, isLoading: categoryLoading } = useGetCategory(id, { query: { queryKey: getGetCategoryQueryKey(id), enabled: !!id } });
+  const { data: postList, isLoading: postsLoading } = useListPosts({ categoryId: id }, { query: { queryKey: getListPostsQueryKey({ categoryId: id }), enabled: !!id } });
 
   if (categoryLoading) {
     return (
