@@ -11,7 +11,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDes
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useQueryClient } from "@tanstack/react-query";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
+import { NOTIFICATIONS_QUERY_KEY } from "@/components/layout/NotificationBell";
 import { useToast } from "@/hooks/use-toast";
 import { currentAppPath, loginPath, useAuth } from "@/lib/auth";
 
@@ -30,6 +31,13 @@ export default function PostDetail() {
   const { data: post, isLoading: postLoading } = useGetPost(id, { query: { queryKey: getGetPostQueryKey(id), enabled: !!id } });
   const { data: replies, isLoading: repliesLoading } = useListReplies(id, { query: { queryKey: getListRepliesQueryKey(id), enabled: !!id } });
   const createReply = useCreateReply();
+
+  // Opening a topic marks its notifications read on the server; refresh the bell.
+  useEffect(() => {
+    if (post?.id && isAuthenticated) {
+      queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_QUERY_KEY });
+    }
+  }, [post?.id, isAuthenticated, queryClient]);
 
   const form = useForm<z.infer<typeof replySchema>>({
     resolver: zodResolver(replySchema),

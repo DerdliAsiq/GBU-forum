@@ -3,6 +3,7 @@ import { db, repliesTable, postsTable, usersTable } from "@workspace/db";
 import { CreateReplyBody } from "@workspace/api-zod";
 import { eq, asc, sql } from "drizzle-orm";
 import { rateLimit } from "../lib/rateLimit";
+import { notifyReply } from "../lib/notifications";
 
 const router = Router();
 const createReplyLimiter = rateLimit(10, 60 * 1000);
@@ -73,6 +74,11 @@ router.post("/posts/:id/replies", createReplyLimiter, async (req, res) => {
         lastReplyAt: new Date(),
       })
       .where(eq(postsTable.id, postId));
+
+    // A notification failure must never fail the reply itself.
+    await notifyReply(postId, reply.id, req.user.id).catch((err) =>
+      req.log.error({ err }, "Failed to create reply notifications"),
+    );
 
     res.status(201).json({
       id: reply.id,

@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 import type { AuthUser } from "@workspace/api-client-react";
 import { apiFetch } from "./api";
 
@@ -43,35 +44,34 @@ interface AuthState {
   logout: () => void;
 }
 
+export const AUTH_QUERY_KEY = ["auth-user"] as const;
+
+async function fetchAuthUser(): Promise<AuthUser | null> {
+  const res = await apiFetch("/api/auth/user", { cache: "no-store" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = (await res.json()) as { user: AuthUser | null };
+  return data.user ?? null;
+}
+
+/**
+ * Current user, shared by every component through the react-query cache.
+ *
+ * A failed request (server waking up, flaky network, 5xx) must not look like
+ * "logged out": it is retried with backoff, and on a later refetch error the
+ * last known user is kept. Only an explicit `{ user: null }` from the server
+ * means signed out. Refetched when the tab regains focus.
+ */
 export function useAuth(): AuthState {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const query = useQuery({
+    queryKey: AUTH_QUERY_KEY,
+    queryFn: fetchAuthUser,
+    retry: 4,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
+    staleTime: 60_000,
+    refetchOnWindowFocus: true,
+  });
 
-  useEffect(() => {
-    let cancelled = false;
-
-    apiFetch("/api/auth/user")
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json() as Promise<{ user: AuthUser | null }>;
-      })
-      .then((data) => {
-        if (!cancelled) {
-          setUser(data.user ?? null);
-          setIsLoading(false);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setUser(null);
-          setIsLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const user = query.data ?? null;
 
   const login = useCallback(() => {
     window.location.href = loginUrl(currentAppPath());
@@ -89,7 +89,7 @@ export function useAuth(): AuthState {
 
   return {
     user,
-    isLoading,
+    isLoading: query.isPending,
     isAuthenticated: !!user,
     login,
     logout,

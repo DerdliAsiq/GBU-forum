@@ -4,6 +4,7 @@ import { CreatePostBody } from "@workspace/api-zod";
 import { eq, desc, sql } from "drizzle-orm";
 import { rateLimit } from "../lib/rateLimit";
 import { recordPostView } from "../lib/postViews";
+import { markPostNotificationsRead } from "../lib/notifications";
 
 const router = Router();
 
@@ -199,6 +200,11 @@ router.get("/posts/:id", async (req, res) => {
 
     // Once per viewer per day; refreshes and re-fetches don't inflate the count.
     const counted = await recordPostView(req, id);
+    if (req.user) {
+      await markPostNotificationsRead(req.user.id, id).catch((err) =>
+        req.log.warn({ err }, "Failed to mark post notifications read"),
+      );
+    }
 
     res.json({
       ...row,

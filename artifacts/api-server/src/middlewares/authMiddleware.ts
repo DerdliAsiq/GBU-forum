@@ -6,6 +6,7 @@ import {
   clearSession,
   getSessionId,
   getSession,
+  refreshSessionIfDue,
   type SessionData,
 } from "../lib/auth";
 
@@ -39,8 +40,9 @@ export async function authMiddleware(
     return;
   }
 
-  const session = await getSession(sid);
-  if (!session?.user?.id) {
+  const found = await getSession(sid);
+  const session = found?.data;
+  if (!found || !session?.user?.id) {
     await clearSession(res, sid);
     next();
     return;
@@ -51,11 +53,18 @@ export async function authMiddleware(
     .from(usersTable)
     .where(eq(usersTable.id, session.user.id));
 
-  if (dbUser?.isBanned) {
+  // Account deleted or banned: end the session.
+  if (!dbUser || dbUser.isBanned) {
     await clearSession(res, sid);
     next();
     return;
   }
+
+  // Keep active users signed in (sliding 30-day expiry). Never fail the
+  // request because of this housekeeping write.
+  await refreshSessionIfDue(res, sid, found).catch((err) =>
+    req.log.warn({ err }, "Failed to extend session"),
+  );
 
   req.user = {
     ...session.user,

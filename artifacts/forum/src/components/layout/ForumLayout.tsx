@@ -2,6 +2,7 @@ import React from "react";
 import { Link } from "wouter";
 import { GraduationCap, LogOut, Shield, Settings } from "lucide-react";
 import { loginPath, useAuth } from "@/lib/auth";
+import { NotificationBell } from "./NotificationBell";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -68,6 +69,8 @@ export function ForumLayout({ children }: { children: React.ReactNode }) {
             >
               Yeni mövzu aç
             </Link>
+
+            {isAuthenticated && <NotificationBell />}
 
             <div className="flex items-center ml-1">
               {isLoading ? (

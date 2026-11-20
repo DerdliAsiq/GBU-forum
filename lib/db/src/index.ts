@@ -10,7 +10,18 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
-export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+export const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  // Drop idle connections before the pooler/network does, and keep live ones warm.
+  idleTimeoutMillis: 30_000,
+  keepAlive: true,
+});
+
+// An idle client that the server/pooler disconnects emits 'error' on the pool;
+// without a listener that is an uncaught exception that kills the process.
+pool.on("error", (err) => {
+  console.error("Postgres pool: idle client error", err.message);
+});
 export const db = drizzle(pool, { schema });
 
 export * from "./schema";
