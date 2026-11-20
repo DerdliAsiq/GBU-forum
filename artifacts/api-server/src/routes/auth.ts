@@ -13,6 +13,7 @@ import {
   type SessionData,
 } from "../lib/auth";
 import { logger } from "../lib/logger";
+import { validateDisplayName, validatePassword, validateUsername } from "../lib/userValidation";
 import { RateLimiter, clientKey, rateLimit, sendTooMany } from "../lib/rateLimit";
 
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME?.trim();
@@ -54,12 +55,25 @@ export async function seedAdminUser() {
         isAdmin: true,
         isBanned: false,
       });
-    } else if (!existing.passwordHash) {
-      const hash = await bcrypt.hash(ADMIN_PASSWORD, 12);
-      await db
-        .update(usersTable)
-        .set({ passwordHash: hash, isAdmin: true })
-        .where(eq(usersTable.username, ADMIN_USERNAME));
+    } else {
+      // The env vars are the source of truth for the admin account: changing
+      // ADMIN_PASSWORD and restarting rotates the password. Note that every
+      // environment sharing this database (local + Render) must use the same
+      // value, or whichever started last wins.
+      const passwordMatches =
+        !!existing.passwordHash && (await bcrypt.compare(ADMIN_PASSWORD, existing.passwordHash));
+      if (!passwordMatches || !existing.isAdmin || existing.isBanned) {
+        await db
+          .update(usersTable)
+          .set({
+            passwordHash: passwordMatches ? existing.passwordHash : await bcrypt.hash(ADMIN_PASSWORD, 12),
+            isAdmin: true,
+            isBanned: false,
+            updatedAt: new Date(),
+          })
+          .where(eq(usersTable.id, existing.id));
+        logger.info({ passwordChanged: !passwordMatches }, "Admin account synced from env");
+      }
     }
   } catch (err) {
     logger.error({ err }, "Failed to seed admin user");
@@ -143,11 +157,6 @@ router.post("/auth/local-login", async (req: Request, res: Response) => {
       return;
     }
 
-    if (!user.isAdmin) {
-      res.status(403).json({ error: "Bu giriş yalnız adminlər üçündür" });
-      return;
-    }
-
     const sessionData: SessionData = {
       user: {
         id: user.id,
@@ -181,6 +190,15 @@ router.post("/auth/register", registerLimiter, async (req: Request, res: Respons
     !password
   ) {
     res.status(400).json({ error: "İstifadəçi adı və şifrə tələb olunur" });
+    return;
+  }
+
+  const validationError =
+    validateUsername(username) ??
+    validatePassword(password) ??
+    (displayName ? validateDisplayName(displayName) : null);
+  if (validationError) {
+    res.status(400).json({ error: validationError });
     return;
   }
 

@@ -8,7 +8,7 @@ import Category from "@/pages/Category";
 import PostDetail from "@/pages/PostDetail";
 import NewPost from "@/pages/NewPost";
 import AdminPanel from "@/pages/admin/AdminPanel";
-import AdminLogin from "@/pages/AdminLogin";
+import Login from "@/pages/Login";
 import Settings from "@/pages/Settings";
 import NotFound from "@/pages/not-found";
 
@@ -24,11 +24,11 @@ const queryClient = new QueryClient({
 function Router() {
   return (
     <Switch>
-      <Route path="/admin-login" component={AdminLogin} />
       <Route>
         <ForumLayout>
           <Switch>
             <Route path="/" component={Home} />
+            <Route path="/giris" component={Login} />
             <Route path="/category/:id" component={Category} />
             <Route path="/post/:id" component={PostDetail} />
             <Route path="/new-post" component={NewPost} />

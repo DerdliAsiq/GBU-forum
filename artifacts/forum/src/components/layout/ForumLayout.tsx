@@ -1,7 +1,7 @@
 import React from "react";
 import { Link } from "wouter";
 import { GraduationCap, LogOut, Shield, Settings } from "lucide-react";
-import { useAuth } from "@/lib/auth";
+import { loginPath, useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -10,7 +10,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 export function ForumLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading, isAuthenticated, login, logout } = useAuth();
 
-  const displayName = user ? (user.firstName ?? user.email ?? "İstifadəçi") : "";
+  const displayName = user
+    ? (user.displayName || user.username || user.firstName || user.email || "İstifadəçi")
+    : "";
   const initials = displayName.substring(0, 2).toUpperCase();
 
   return (
@@ -56,7 +58,7 @@ export function ForumLayout({ children }: { children: React.ReactNode }) {
             </Link>
 
             <Link
-              href="/new-post"
+              href={isAuthenticated ? "/new-post" : loginPath("/new-post")}
               className="text-sm font-bold px-4 py-2 rounded-lg transition-all hover:shadow-md"
               style={{
                 background: "#fff",
@@ -99,11 +101,11 @@ export function ForumLayout({ children }: { children: React.ReactNode }) {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent className="w-56" align="end" forceMount>
                     <div className="flex items-center gap-2 p-2">
-                      <div className="flex flex-col leading-none">
-                        {user?.firstName && (
-                          <p className="font-semibold text-sm">{user.firstName} {user.lastName}</p>
+                      <div className="flex flex-col gap-1 leading-none">
+                        <p className="font-semibold text-sm">{displayName}</p>
+                        {user?.username && (
+                          <p className="w-[200px] truncate text-xs text-muted-foreground">@{user.username}</p>
                         )}
-                        <p className="w-[200px] truncate text-xs text-muted-foreground">{user?.email}</p>
                       </div>
                     </div>
                     <div className="h-px bg-border my-1" />
@@ -151,7 +153,7 @@ export function ForumLayout({ children }: { children: React.ReactNode }) {
         <div className="flex flex-col items-center gap-2">
           <GraduationCap className="h-5 w-5" style={{ color: "#C8922A" }} />
           <p>© {new Date().getFullYear()} Gəncə Bərəkət Universiteti Tələbə Forumu.</p>
-          <p>Bu platforma tələbələr üçün anonim müzakirə məkanıdır.</p>
+          <p>Bu platforma tələbələr üçün müzakirə məkanıdır.</p>
         </div>
       </footer>
     </div>

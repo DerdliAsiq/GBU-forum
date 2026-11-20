@@ -4,6 +4,37 @@ import { apiFetch } from "./api";
 
 export type { AuthUser };
 
+const BASE = import.meta.env.BASE_URL.replace(/\/+$/, "");
+
+/** Full browser URL for an in-app path, honouring BASE_PATH. */
+export function appUrl(path: string): string {
+  return `${BASE}${path}`;
+}
+
+/** The current in-app path (without BASE_PATH), including the query string. */
+export function currentAppPath(): string {
+  const path = window.location.pathname.slice(BASE.length) || "/";
+  return path + window.location.search;
+}
+
+/** Only same-app paths are allowed as a post-login destination. */
+export function safeNextPath(next: string | null | undefined): string {
+  if (!next || !next.startsWith("/") || next.startsWith("//") || /[\\\u0000-\u001f]/.test(next)) {
+    return "/";
+  }
+  return next.startsWith("/giris") ? "/" : next;
+}
+
+/** In-app link to the sign-in page that returns to `next` afterwards. */
+export function loginPath(next: string = "/"): string {
+  const target = safeNextPath(next);
+  return target === "/" ? "/giris" : `/giris?next=${encodeURIComponent(target)}`;
+}
+
+function loginUrl(next: string): string {
+  return appUrl(loginPath(next));
+}
+
 interface AuthState {
   user: AuthUser | null;
   isLoading: boolean;
@@ -43,7 +74,7 @@ export function useAuth(): AuthState {
   }, []);
 
   const login = useCallback(() => {
-    window.location.href = "/admin-login";
+    window.location.href = loginUrl(currentAppPath());
   }, []);
 
   const logout = useCallback(() => {

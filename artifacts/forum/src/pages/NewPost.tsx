@@ -9,17 +9,57 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useToast } from "@/hooks/use-toast";
-import { ChevronLeft, PenLine } from "lucide-react";
+import { ChevronLeft, LogIn, PenLine } from "lucide-react";
 import { Link } from "wouter";
+import { Skeleton } from "@/components/ui/skeleton";
+import { currentAppPath, loginPath, useAuth } from "@/lib/auth";
 
 const postSchema = z.object({
   categoryId: z.coerce.number().min(1, "Kategoriya seçilməlidir"),
   title: z.string().min(3, "Başlıq çox qısadır").max(200, "Başlıq çox uzundur"),
   content: z.string().min(10, "Mətn çox qısadır"),
-  authorName: z.string().max(50, "Ad çox uzundur").optional().transform(val => val === "" ? undefined : val)
 });
 
 export default function NewPost() {
+  const { isLoading, isAuthenticated } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="max-w-2xl mx-auto space-y-4">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="max-w-md mx-auto py-16 text-center space-y-4 animate-in fade-in duration-500">
+        <div
+          className="mx-auto flex items-center justify-center rounded-xl"
+          style={{ width: 56, height: 56, background: "linear-gradient(135deg, #C8922A, #E8B84B)" }}
+        >
+          <LogIn className="h-6 w-6 text-white" />
+        </div>
+        <h1 className="text-xl font-extrabold">Mövzu açmaq üçün daxil olun</h1>
+        <p className="text-sm text-muted-foreground">
+          Yeni mövzu yalnız hesabı olan istifadəçilər tərəfindən açıla bilər.
+        </p>
+        <Link
+          href={loginPath(currentAppPath())}
+          className="inline-block font-bold text-sm text-white px-6 py-2.5 rounded-lg"
+          style={{ background: "linear-gradient(135deg, #C8922A, #E8B84B)" }}
+        >
+          Daxil ol / Qeydiyyat
+        </Link>
+      </div>
+    );
+  }
+
+  return <NewPostForm />;
+}
+
+function NewPostForm() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const searchParams = new URLSearchParams(window.location.search);
@@ -34,7 +74,6 @@ export default function NewPost() {
       categoryId: initialCategoryId ? Number(initialCategoryId) : 0,
       title: "",
       content: "",
-      authorName: ""
     }
   });
 
@@ -143,25 +182,6 @@ export default function NewPost() {
                   </FormItem>
                 )}
               />
-
-              <div className="rounded-lg p-4" style={{ background: "#FEF9EE", border: "1px solid #EAD9B8" }}>
-                <FormField
-                  control={form.control}
-                  name="authorName"
-                  render={({ field }) => (
-                    <FormItem className="max-w-sm">
-                      <FormLabel className="text-xs font-bold text-foreground/80 uppercase tracking-wide">Adınız (Könüllü)</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Anonim" {...field} />
-                      </FormControl>
-                      <FormDescription className="text-xs">
-                        Siz anonim paylaşırsınız. Ad yazmaq istəyirsinizsə, yuxarıya daxil edin.
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
 
               <div className="flex justify-end pt-2">
                 <Button

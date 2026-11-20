@@ -3,7 +3,6 @@ import { db, postsTable, categoriesTable } from "@workspace/db";
 import { CreatePostBody } from "@workspace/api-zod";
 import { eq, desc, sql } from "drizzle-orm";
 import { rateLimit } from "../lib/rateLimit";
-import { isReservedAuthorName, RESERVED_AUTHOR_ERROR } from "../lib/authorName";
 
 const router = Router();
 const createPostLimiter = rateLimit(5, 60 * 1000);
@@ -74,14 +73,16 @@ router.get("/posts", async (req, res) => {
 });
 
 router.post("/posts", createPostLimiter, async (req, res) => {
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ error: "Mövzu açmaq üçün hesabınıza daxil olun" });
+  }
   const parsed = CreatePostBody.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "Validation error", details: parsed.error.issues });
   }
-  const { categoryId, title, content, authorName } = parsed.data;
-  if (authorName && !req.user?.isAdmin && isReservedAuthorName(authorName)) {
-    return res.status(400).json({ error: RESERVED_AUTHOR_ERROR });
-  }
+  // Topics are signed by the account; any authorName in the body is ignored.
+  const { categoryId, title, content } = parsed.data;
+  const authorName = (req.user.displayName || req.user.username || "İstifadəçi").slice(0, 50);
   try {
     const [cat] = await db.select({ id: categoriesTable.id }).from(categoriesTable).where(eq(categoriesTable.id, categoryId));
     if (!cat) return res.status(400).json({ error: "Category not found" });
@@ -90,7 +91,7 @@ router.post("/posts", createPostLimiter, async (req, res) => {
       categoryId,
       title,
       content,
-      authorName: authorName || "Anonim",
+      authorName,
       isPinned: false,
     }).returning();
 

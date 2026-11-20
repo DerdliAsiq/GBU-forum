@@ -2,12 +2,13 @@ import { Router } from "express";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { validateDisplayName, validateUsername } from "../lib/userValidation";
 
 const router = Router();
 
 const UpdateProfileBody = z.object({
-  username: z.string().min(2).max(50).regex(/^[a-zA-Z0-9_\-\.ğüşıöçĞÜŞİÖÇ]+$/, "Yalnız hərf, rəqəm və _ simvollarına icazə verilir").optional(),
-  displayName: z.string().min(1).max(100).optional(),
+  username: z.string().optional(),
+  displayName: z.string().optional(),
   profileImageUrl: z.string().optional(),
 });
 
@@ -44,6 +45,15 @@ router.put("/profile", async (req, res) => {
   }
 
   const { username, displayName, profileImageUrl } = parsed.data;
+
+  // Admins may keep staff-like names (e.g. "Admin"); everyone else may not.
+  const allowReserved = req.user.isAdmin;
+  const nameError =
+    (username !== undefined ? validateUsername(username, { allowReserved }) : null) ??
+    (displayName !== undefined ? validateDisplayName(displayName, { allowReserved }) : null);
+  if (nameError) {
+    return res.status(400).json({ error: nameError });
+  }
 
   if (username) {
     const [existing] = await db.select({ id: usersTable.id }).from(usersTable)

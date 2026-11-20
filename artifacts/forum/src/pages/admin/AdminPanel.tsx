@@ -21,6 +21,7 @@ import { Shield, ShieldAlert, AlertCircle, Edit, Trash2, Pin, Plus, Users, Folde
 import { useToast } from "@/hooks/use-toast";
 import { formatDate } from "@/lib/date";
 import { apiFetch } from "@/lib/api";
+import NotFound from "@/pages/not-found";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,8 +53,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 export default function AdminPanel() {
-  const { user, isLoading: authLoading, isAuthenticated, login } = useAuth();
-  const [, setLocation] = useLocation();
+  const { user, isLoading: authLoading, isAuthenticated } = useAuth();
 
   if (authLoading) {
     return (
@@ -64,30 +64,10 @@ export default function AdminPanel() {
     );
   }
 
-  if (!isAuthenticated) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 space-y-6 max-w-md mx-auto text-center">
-        <ShieldAlert className="h-16 w-16 text-slate-300" />
-        <div>
-          <h2 className="text-2xl font-bold text-slate-900 mb-2">Admin Panelinə Giriş</h2>
-          <p className="text-slate-500 mb-6">Bu səhifəyə daxil olmaq üçün sistemə giriş etməlisiniz.</p>
-        </div>
-        <Button onClick={login} size="lg" className="w-full">Sistemə daxil ol</Button>
-      </div>
-    );
-  }
-
-  if (!user?.isAdmin) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 space-y-4 max-w-md mx-auto text-center">
-        <AlertCircle className="h-16 w-16 text-destructive" />
-        <h2 className="text-2xl font-bold text-slate-900">Giriş rədd edildi</h2>
-        <p className="text-slate-500">Bu səhifəyə girişiniz yoxdur. Admin səlahiyyətləri tələb olunur.</p>
-        <Button variant="outline" onClick={() => setLocation("/")} className="mt-4">
-          Ana səhifəyə qayıt
-        </Button>
-      </div>
-    );
+  // Don't advertise that an admin area exists: anyone who isn't an admin
+  // (signed in or not) just sees the normal "page not found".
+  if (!isAuthenticated || !user?.isAdmin) {
+    return <NotFound />;
   }
 
   return (
