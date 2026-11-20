@@ -41,8 +41,8 @@ export function ReportDialog({ postId, replyId }: { postId?: number; replyId?: n
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
         toast({
-          title: data.alreadyReported ? "Artıq şikayət etmisiniz" : "Şikayət göndərildi",
-          description: "Moderatorlar baxacaq. Təşəkkürlər.",
+          title: data.alreadyReported ? "Bu məzmun artıq şikayət edilib" : "Şikayət göndərildi",
+          description: data.alreadyReported ? "Moderatorlar artıq yoxlayır." : "Moderatorlar baxacaq. Təşəkkürlər.",
         });
         setOpen(false);
         setDetails("");

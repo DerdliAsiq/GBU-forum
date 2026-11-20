@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, postsTable, repliesTable, reportsTable, REPORT_REASONS } from "@workspace/db";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { rateLimit } from "../lib/rateLimit";
 import { notifyAdminsOfReport } from "../lib/notifications";
 
@@ -23,45 +23,57 @@ router.post("/reports", reportLimiter, async (req, res) => {
   try {
     let topicId: number;
     let authorId: string | null;
+    let editedAt: Date | null;
     if (hasReply) {
       const [reply] = await db
-        .select({ postId: repliesTable.postId, authorId: repliesTable.authorId })
+        .select({ postId: repliesTable.postId, authorId: repliesTable.authorId, editedAt: repliesTable.editedAt })
         .from(repliesTable)
         .where(eq(repliesTable.id, replyId));
       if (!reply) return res.status(404).json({ error: "Not found" });
-      topicId = reply.postId;
-      authorId = reply.authorId;
+      ({ postId: topicId, authorId, editedAt } = reply);
     } else {
       const [post] = await db
-        .select({ id: postsTable.id, authorId: postsTable.authorId })
+        .select({ id: postsTable.id, authorId: postsTable.authorId, editedAt: postsTable.editedAt })
         .from(postsTable)
         .where(eq(postsTable.id, postId));
       if (!post) return res.status(404).json({ error: "Not found" });
-      topicId = post.id;
-      authorId = post.authorId;
+      ({ id: topicId, authorId, editedAt } = post);
     }
     if (authorId === req.user.id) return res.status(400).json({ error: "Öz yazınızdan şikayət edə bilməzsiniz" });
 
-    // One open report per user per piece of content.
-    const [existing] = await db
-      .select({ id: reportsTable.id })
+    // Anti-spam: each item gets reviewed once. While a report is open nobody can
+    // add another (and admins aren't notified again). After an admin dismissed it,
+    // it stays closed unless the author edited the content since that review.
+    const sameItem = hasReply ? eq(reportsTable.replyId, replyId) : eq(reportsTable.postId, postId);
+    const [lastReview] = await db
+      .select({ status: reportsTable.status, resolvedAt: reportsTable.resolvedAt })
       .from(reportsTable)
-      .where(
-        and(
-          eq(reportsTable.reporterId, req.user.id),
-          eq(reportsTable.status, "open"),
-          hasReply ? eq(reportsTable.replyId, replyId) : eq(reportsTable.postId, postId),
-        ),
-      );
-    if (existing) return res.status(200).json({ success: true, alreadyReported: true });
+      .where(and(sameItem, inArray(reportsTable.status, ["open", "dismissed"])))
+      .orderBy(desc(reportsTable.createdAt))
+      .limit(1);
+    if (lastReview?.status === "open") {
+      return res.status(200).json({ success: true, alreadyReported: true });
+    }
+    if (
+      lastReview?.status === "dismissed" &&
+      !(editedAt && lastReview.resolvedAt && editedAt > lastReview.resolvedAt)
+    ) {
+      return res.status(409).json({ error: "Bu məzmun artıq yoxlanılıb və qaydalara uyğun hesab edilib", alreadyReviewed: true });
+    }
 
-    await db.insert(reportsTable).values({
-      reporterId: req.user.id,
-      postId: hasPost ? postId : null,
-      replyId: hasReply ? replyId : null,
-      reason,
-      details: details?.trim() || null,
-    });
+    // The partial unique index (one open report per item) settles simultaneous reports.
+    const inserted = await db
+      .insert(reportsTable)
+      .values({
+        reporterId: req.user.id,
+        postId: hasPost ? postId : null,
+        replyId: hasReply ? replyId : null,
+        reason,
+        details: details?.trim() || null,
+      })
+      .onConflictDoNothing()
+      .returning({ id: reportsTable.id });
+    if (inserted.length === 0) return res.status(200).json({ success: true, alreadyReported: true });
 
     await notifyAdminsOfReport(topicId, hasReply ? replyId : null, req.user.id).catch((err) =>
       req.log.error({ err }, "Failed to notify admins of report"),

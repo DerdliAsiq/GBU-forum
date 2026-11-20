@@ -1,4 +1,5 @@
-import { pgTable, serial, varchar, integer, text, timestamp, index } from "drizzle-orm/pg-core";
+import { pgTable, serial, varchar, integer, text, timestamp, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { usersTable } from "./auth";
 import { postsTable } from "./posts";
 import { repliesTable } from "./replies";
@@ -21,7 +22,13 @@ export const reportsTable = pgTable(
     resolvedAt: timestamp("resolved_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
-  (table) => [index("reports_status_created_idx").on(table.status, table.createdAt)],
+  (table) => [
+    index("reports_status_created_idx").on(table.status, table.createdAt),
+    // One open report per item: later reporters get "already reported".
+    uniqueIndex("reports_one_open_per_item")
+      .on(sql`coalesce(${table.postId}, 0)`, sql`coalesce(${table.replyId}, 0)`)
+      .where(sql`${table.status} = 'open'`),
+  ],
 );
 
 export const REPORT_REASONS = ["spam", "insult", "inappropriate", "off_topic", "other"] as const;
