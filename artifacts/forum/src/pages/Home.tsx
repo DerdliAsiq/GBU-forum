@@ -169,7 +169,7 @@ export default function Home() {
                       {post.title}
                     </h4>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-medium text-muted-foreground">{post.authorName || "Anonim"}</span>
+                      <span className="text-xs font-medium text-muted-foreground">@{post.authorName}</span>
                       <span
                         className="text-[10px] font-semibold px-2 py-0.5 rounded"
                         style={{ background: "#FEF3DC", color: "#B8821E" }}

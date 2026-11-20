@@ -25,7 +25,11 @@ const loginIpLimiter = new RateLimiter(20, FIFTEEN_MINUTES);
 // Per address + username: caps guessing one account without letting a stranger
 // lock that account out for everyone else.
 const loginAccountLimiter = new RateLimiter(5, FIFTEEN_MINUTES);
-const registerLimiter = rateLimit(5, 60 * 60 * 1000);
+// Registration: typos and taken usernames must not lock people out, so only
+// accounts actually created count toward the per-address cap; a much looser
+// cap on all attempts just stops hammering.
+const registerAttemptLimiter = rateLimit(30, FIFTEEN_MINUTES);
+const accountsCreatedLimiter = new RateLimiter(5, 60 * 60 * 1000);
 
 // Compared against when the user does not exist, so that path costs as much as
 // a real password check and response time does not reveal valid usernames.
@@ -180,7 +184,7 @@ router.post("/auth/local-login", async (req: Request, res: Response) => {
   }
 });
 
-router.post("/auth/register", registerLimiter, async (req: Request, res: Response) => {
+router.post("/auth/register", registerAttemptLimiter, async (req: Request, res: Response) => {
   const { username, password, displayName } = req.body ?? {};
   if (
     typeof username !== "string" ||
@@ -199,6 +203,13 @@ router.post("/auth/register", registerLimiter, async (req: Request, res: Respons
     (displayName ? validateDisplayName(displayName) : null);
   if (validationError) {
     res.status(400).json({ error: validationError });
+    return;
+  }
+
+  const ip = clientKey(req);
+  const createdWait = accountsCreatedLimiter.check(ip);
+  if (createdWait) {
+    sendTooMany(res, createdWait);
     return;
   }
 
@@ -223,6 +234,7 @@ router.post("/auth/register", registerLimiter, async (req: Request, res: Respons
         isBanned: false,
       })
       .returning();
+    accountsCreatedLimiter.hit(ip);
 
     const sessionData: SessionData = {
       user: {

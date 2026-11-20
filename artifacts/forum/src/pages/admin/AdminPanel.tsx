@@ -528,7 +528,7 @@ function PostsTab() {
                 </div>
               </TableCell>
               <TableCell><Badge variant="outline">{post.categoryName}</Badge></TableCell>
-              <TableCell>{post.authorName || "Anonim"}</TableCell>
+              <TableCell>@{post.authorName}</TableCell>
               <TableCell className="text-muted-foreground text-sm">
                 Baxış: {post.viewCount} | Cavab: {post.replyCount}
               </TableCell>

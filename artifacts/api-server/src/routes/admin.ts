@@ -168,6 +168,9 @@ router.patch("/posts/:id", requireAdmin, async (req, res) => {
     if (!post) return res.status(404).json({ error: "Not found" });
 
     const [cat] = await db.select({ name: categoriesTable.name }).from(categoriesTable).where(eq(categoriesTable.id, post.categoryId));
+    const [author] = post.authorId
+      ? await db.select({ username: usersTable.username }).from(usersTable).where(eq(usersTable.id, post.authorId))
+      : [];
 
     res.json({
       id: post.id,
@@ -175,7 +178,7 @@ router.patch("/posts/:id", requireAdmin, async (req, res) => {
       categoryName: cat?.name ?? "",
       title: post.title,
       content: post.content,
-      authorName: post.authorName,
+      authorName: author?.username ?? post.authorName,
       createdAt: post.createdAt.toISOString(),
       replyCount: post.replyCount,
       viewCount: post.viewCount,

@@ -21,6 +21,10 @@ services:
         value: production
       - key: TRUST_PROXY
         value: "1"
+      # Render is fronted by Cloudflare, which always sets this to the real
+      # visitor address; without it every visitor shares one rate-limit bucket.
+      - key: CLIENT_IP_HEADER
+        value: cf-connecting-ip
       - key: DATABASE_URL
         sync: false
       - key: ADMIN_USERNAME

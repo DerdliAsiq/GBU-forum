@@ -1,10 +1,14 @@
 import { Router } from "express";
-import { db, postsTable, categoriesTable } from "@workspace/db";
+import { db, postsTable, categoriesTable, usersTable } from "@workspace/db";
 import { CreatePostBody } from "@workspace/api-zod";
 import { eq, desc, sql } from "drizzle-orm";
 import { rateLimit } from "../lib/rateLimit";
 
 const router = Router();
+
+// Always show the author's *current* username (falls back to the stored
+// snapshot only when the account no longer exists).
+const authorNameSql = sql<string>`coalesce(${usersTable.username}, ${postsTable.authorName})`;
 const createPostLimiter = rateLimit(5, 60 * 1000);
 
 router.get("/posts", async (req, res) => {
@@ -21,7 +25,7 @@ router.get("/posts", async (req, res) => {
         categoryName: categoriesTable.name,
         title: postsTable.title,
         content: postsTable.content,
-        authorName: postsTable.authorName,
+        authorName: authorNameSql,
         createdAt: postsTable.createdAt,
         replyCount: postsTable.replyCount,
         viewCount: postsTable.viewCount,
@@ -29,7 +33,8 @@ router.get("/posts", async (req, res) => {
         lastReplyAt: postsTable.lastReplyAt,
       })
       .from(postsTable)
-      .innerJoin(categoriesTable, eq(postsTable.categoryId, categoriesTable.id));
+      .innerJoin(categoriesTable, eq(postsTable.categoryId, categoriesTable.id))
+      .leftJoin(usersTable, eq(postsTable.authorId, usersTable.id));
 
     const countQuery = db
       .select({ count: sql<number>`count(*)::int` })
@@ -82,7 +87,10 @@ router.post("/posts", createPostLimiter, async (req, res) => {
   }
   // Topics are signed by the account; any authorName in the body is ignored.
   const { categoryId, title, content } = parsed.data;
-  const authorName = (req.user.displayName || req.user.username || "İstifadəçi").slice(0, 50);
+  if (!req.user.username) {
+    return res.status(400).json({ error: "Əvvəlcə profilinizdə istifadəçi adı təyin edin" });
+  }
+  const authorName = req.user.username;
   try {
     const [cat] = await db.select({ id: categoriesTable.id }).from(categoriesTable).where(eq(categoriesTable.id, categoryId));
     if (!cat) return res.status(400).json({ error: "Category not found" });
@@ -91,6 +99,7 @@ router.post("/posts", createPostLimiter, async (req, res) => {
       categoryId,
       title,
       content,
+      authorId: req.user.id,
       authorName,
       isPinned: false,
     }).returning();
@@ -106,7 +115,7 @@ router.post("/posts", createPostLimiter, async (req, res) => {
         categoryName: categoriesTable.name,
         title: postsTable.title,
         content: postsTable.content,
-        authorName: postsTable.authorName,
+        authorName: authorNameSql,
         createdAt: postsTable.createdAt,
         replyCount: postsTable.replyCount,
         viewCount: postsTable.viewCount,
@@ -115,6 +124,7 @@ router.post("/posts", createPostLimiter, async (req, res) => {
       })
       .from(postsTable)
       .innerJoin(categoriesTable, eq(postsTable.categoryId, categoriesTable.id))
+      .leftJoin(usersTable, eq(postsTable.authorId, usersTable.id))
       .where(eq(postsTable.id, post.id));
 
     res.status(201).json({
@@ -137,7 +147,7 @@ router.get("/posts/recent", async (req, res) => {
         categoryName: categoriesTable.name,
         title: postsTable.title,
         content: postsTable.content,
-        authorName: postsTable.authorName,
+        authorName: authorNameSql,
         createdAt: postsTable.createdAt,
         replyCount: postsTable.replyCount,
         viewCount: postsTable.viewCount,
@@ -146,6 +156,7 @@ router.get("/posts/recent", async (req, res) => {
       })
       .from(postsTable)
       .innerJoin(categoriesTable, eq(postsTable.categoryId, categoriesTable.id))
+      .leftJoin(usersTable, eq(postsTable.authorId, usersTable.id))
       .orderBy(desc(postsTable.createdAt))
       .limit(10);
 
@@ -171,7 +182,7 @@ router.get("/posts/:id", async (req, res) => {
         categoryName: categoriesTable.name,
         title: postsTable.title,
         content: postsTable.content,
-        authorName: postsTable.authorName,
+        authorName: authorNameSql,
         createdAt: postsTable.createdAt,
         replyCount: postsTable.replyCount,
         viewCount: postsTable.viewCount,
@@ -180,6 +191,7 @@ router.get("/posts/:id", async (req, res) => {
       })
       .from(postsTable)
       .innerJoin(categoriesTable, eq(postsTable.categoryId, categoriesTable.id))
+      .leftJoin(usersTable, eq(postsTable.authorId, usersTable.id))
       .where(eq(postsTable.id, id));
 
     if (!row) return res.status(404).json({ error: "Not found" });

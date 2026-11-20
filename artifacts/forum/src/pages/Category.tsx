@@ -111,7 +111,7 @@ export default function Category() {
                   {post.title}
                 </h3>
                 <div className="flex items-center gap-2 mt-1.5 text-xs text-muted-foreground flex-wrap">
-                  <span className="font-semibold text-foreground/70">{post.authorName || "Anonim"}</span>
+                  <span className="font-semibold text-foreground/70">@{post.authorName}</span>
                   <span>·</span>
                   <span>{formatDate(post.createdAt)}</span>
                   {post.lastReplyAt && (

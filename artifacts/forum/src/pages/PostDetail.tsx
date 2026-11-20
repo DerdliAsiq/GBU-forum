@@ -13,10 +13,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { currentAppPath, loginPath, useAuth } from "@/lib/auth";
 
 const replySchema = z.object({
   content: z.string().min(2, "Mətn çox qısadır").max(2000, "Mətn çox uzundur"),
-  authorName: z.string().max(50, "Ad çox uzundur").optional()
 });
 
 export default function PostDetail() {
@@ -25,6 +25,7 @@ export default function PostDetail() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const repliesEndRef = useRef<HTMLDivElement>(null);
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
 
   const { data: post, isLoading: postLoading } = useGetPost(id, { query: { queryKey: getGetPostQueryKey(id), enabled: !!id } });
   const { data: replies, isLoading: repliesLoading } = useListReplies(id, { query: { queryKey: getListRepliesQueryKey(id), enabled: !!id } });
@@ -32,7 +33,7 @@ export default function PostDetail() {
 
   const form = useForm<z.infer<typeof replySchema>>({
     resolver: zodResolver(replySchema),
-    defaultValues: { content: "", authorName: "" }
+    defaultValues: { content: "" }
   });
 
   const onSubmit = (values: z.infer<typeof replySchema>) => {
@@ -103,7 +104,7 @@ export default function PostDetail() {
               >
                 <User className="h-3 w-3 text-primary" />
               </div>
-              <span className="font-bold text-foreground/80">{post.authorName || "Anonim"}</span>
+              <span className="font-bold text-foreground/80">@{post.authorName}</span>
             </div>
             <div className="flex items-center gap-1.5">
               <Clock className="h-3.5 w-3.5 text-primary/70" />
@@ -163,9 +164,9 @@ export default function PostDetail() {
                       className="rounded-full flex items-center justify-center font-bold text-white text-xs"
                       style={{ width: 28, height: 28, background: "linear-gradient(135deg, #C8922A, #E8B84B)", flexShrink: 0 }}
                     >
-                      {(reply.authorName || "A")[0].toUpperCase()}
+                      {(reply.authorName || "?")[0].toUpperCase()}
                     </div>
-                    <span className="font-bold text-sm text-foreground/80">{reply.authorName || "Anonim"}</span>
+                    <span className="font-bold text-sm text-foreground/80">@{reply.authorName}</span>
                   </div>
                   <span className="text-xs text-muted-foreground">{formatDate(reply.createdAt)}</span>
                 </div>
@@ -192,6 +193,20 @@ export default function PostDetail() {
           <h3 className="text-sm font-bold text-white">Cavab yaz</h3>
         </div>
         <div className="p-5">
+          {authLoading ? (
+            <Skeleton className="h-24 w-full rounded-lg" />
+          ) : !isAuthenticated ? (
+            <div className="text-center py-6 space-y-3">
+              <p className="text-sm text-muted-foreground">Cavab yazmaq üçün hesabınıza daxil olun.</p>
+              <Link
+                href={loginPath(currentAppPath())}
+                className="inline-block font-bold text-sm text-white px-6 py-2.5 rounded-lg"
+                style={{ background: "linear-gradient(135deg, #C8922A, #E8B84B)" }}
+              >
+                Daxil ol / Qeydiyyat
+              </Link>
+            </div>
+          ) : (
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
@@ -211,26 +226,7 @@ export default function PostDetail() {
                 )}
               />
 
-              <div
-                className="flex flex-col sm:flex-row items-end gap-4 justify-between rounded-lg p-4"
-                style={{ background: "#FEF9EE", border: "1px solid #EAD9B8" }}
-              >
-                <FormField
-                  control={form.control}
-                  name="authorName"
-                  render={({ field }) => (
-                    <FormItem className="w-full sm:max-w-xs">
-                      <FormLabel className="text-xs font-semibold text-muted-foreground">Adınız (Könüllü)</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Anonim" {...field} />
-                      </FormControl>
-                      <FormDescription className="text-[10px]">
-                        Siz anonim paylaşırsınız. Ad yazmaq istəyirsinizsə, yuxarıya daxil edin.
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+              <div className="flex justify-end">
                 <Button
                   type="submit"
                   disabled={createReply.isPending}
@@ -242,6 +238,7 @@ export default function PostDetail() {
               </div>
             </form>
           </Form>
+          )}
         </div>
       </div>
     </div>

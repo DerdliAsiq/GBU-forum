@@ -1,9 +1,8 @@
 import { Router } from "express";
-import { db, repliesTable, postsTable } from "@workspace/db";
+import { db, repliesTable, postsTable, usersTable } from "@workspace/db";
 import { CreateReplyBody } from "@workspace/api-zod";
 import { eq, asc, sql } from "drizzle-orm";
 import { rateLimit } from "../lib/rateLimit";
-import { isReservedAuthorName, RESERVED_AUTHOR_ERROR } from "../lib/authorName";
 
 const router = Router();
 const createReplyLimiter = rateLimit(10, 60 * 1000);
@@ -13,8 +12,17 @@ router.get("/posts/:id/replies", async (req, res) => {
   if (isNaN(postId)) return res.status(400).json({ error: "Invalid id" });
   try {
     const rows = await db
-      .select()
+      .select({
+        id: repliesTable.id,
+        postId: repliesTable.postId,
+        content: repliesTable.content,
+        // Always the author's *current* username; the stored snapshot is only
+        // a fallback for replies whose account no longer exists.
+        authorName: sql<string>`coalesce(${usersTable.username}, ${repliesTable.authorName})`,
+        createdAt: repliesTable.createdAt,
+      })
       .from(repliesTable)
+      .leftJoin(usersTable, eq(repliesTable.authorId, usersTable.id))
       .where(eq(repliesTable.postId, postId))
       .orderBy(asc(repliesTable.createdAt));
 
@@ -32,6 +40,9 @@ router.get("/posts/:id/replies", async (req, res) => {
 });
 
 router.post("/posts/:id/replies", createReplyLimiter, async (req, res) => {
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ error: "Cavab yazmaq üçün hesabınıza daxil olun" });
+  }
   const postId = parseInt(String(req.params.id), 10);
   if (isNaN(postId)) return res.status(400).json({ error: "Invalid id" });
 
@@ -39,11 +50,12 @@ router.post("/posts/:id/replies", createReplyLimiter, async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: "Validation error", details: parsed.error.issues });
   }
-
-  const { content, authorName } = parsed.data;
-  if (authorName && !req.user?.isAdmin && isReservedAuthorName(authorName)) {
-    return res.status(400).json({ error: RESERVED_AUTHOR_ERROR });
+  if (!req.user.username) {
+    return res.status(400).json({ error: "Əvvəlcə profilinizdə istifadəçi adı təyin edin" });
   }
+
+  // Replies are signed by the account; any authorName in the body is ignored.
+  const { content } = parsed.data;
   try {
     const [post] = await db.select({ id: postsTable.id }).from(postsTable).where(eq(postsTable.id, postId));
     if (!post) return res.status(404).json({ error: "Post not found" });
@@ -51,7 +63,8 @@ router.post("/posts/:id/replies", createReplyLimiter, async (req, res) => {
     const [reply] = await db.insert(repliesTable).values({
       postId,
       content,
-      authorName: authorName || "Anonim",
+      authorId: req.user.id,
+      authorName: req.user.username,
     }).returning();
 
     await db.update(postsTable)
