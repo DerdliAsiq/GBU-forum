@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import { type Request, type Response } from "express";
 import { db, sessionsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import type { AuthUser } from "@workspace/api-zod";
 
 export const SESSION_COOKIE = "sid";
@@ -10,6 +10,15 @@ const DAY = 24 * 60 * 60 * 1000;
 export const SESSION_TTL = 30 * DAY;
 /** Re-extend at most once a day per session, to avoid a write on every request. */
 const SESSION_REFRESH_AFTER = DAY;
+
+/**
+ * The cookie holds a random token; the DB only stores its SHA-256, so a leaked
+ * sessions table can't be replayed as cookies. Rows written before hashing was
+ * introduced hold the raw token and are upgraded on first use (see getSession).
+ */
+export function hashSessionId(sid: string): string {
+  return crypto.createHash("sha256").update(sid).digest("hex");
+}
 
 export function setSessionCookie(res: Response, sid: string): void {
   res.cookie(SESSION_COOKIE, sid, {
@@ -28,7 +37,7 @@ export interface SessionData {
 export async function createSession(data: SessionData): Promise<string> {
   const sid = crypto.randomBytes(32).toString("hex");
   await db.insert(sessionsTable).values({
-    sid,
+    sid: hashSessionId(sid),
     sess: data as unknown as Record<string, unknown>,
     expire: new Date(Date.now() + SESSION_TTL),
   });
@@ -38,14 +47,21 @@ export async function createSession(data: SessionData): Promise<string> {
 export async function getSession(
   sid: string,
 ): Promise<{ data: SessionData; expire: Date } | null> {
-  const [row] = await db
+  const hashed = hashSessionId(sid);
+  const rows = await db
     .select()
     .from(sessionsTable)
-    .where(eq(sessionsTable.sid, sid));
+    .where(inArray(sessionsTable.sid, [hashed, sid]));
+  const row = rows.find((r) => r.sid === hashed) ?? rows[0];
 
   if (!row || row.expire < new Date()) {
     if (row) await deleteSession(sid);
     return null;
+  }
+
+  // Legacy row keyed by the raw token: re-key it by the hash (the cookie is unchanged).
+  if (row.sid === sid && sid !== hashed) {
+    await db.update(sessionsTable).set({ sid: hashed }).where(eq(sessionsTable.sid, sid));
   }
 
   return { data: row.sess as unknown as SessionData, expire: row.expire };
@@ -76,11 +92,19 @@ export async function updateSession(
       sess: data as unknown as Record<string, unknown>,
       expire: new Date(Date.now() + SESSION_TTL),
     })
-    .where(eq(sessionsTable.sid, sid));
+    .where(eq(sessionsTable.sid, hashSessionId(sid)));
 }
 
 export async function deleteSession(sid: string): Promise<void> {
-  await db.delete(sessionsTable).where(eq(sessionsTable.sid, sid));
+  await db.delete(sessionsTable).where(inArray(sessionsTable.sid, [hashSessionId(sid), sid]));
+}
+
+/** Signs a user out everywhere except the session `keepSid` (e.g. after a password change). */
+export async function deleteOtherSessions(userId: string, keepSid?: string): Promise<void> {
+  const byUser = sql`${sessionsTable.sess}->'user'->>'id' = ${userId}`;
+  await db
+    .delete(sessionsTable)
+    .where(keepSid ? and(byUser, ne(sessionsTable.sid, hashSessionId(keepSid)), ne(sessionsTable.sid, keepSid)) : byUser);
 }
 
 export async function clearSession(

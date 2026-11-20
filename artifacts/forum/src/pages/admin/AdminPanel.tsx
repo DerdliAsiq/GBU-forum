@@ -17,7 +17,11 @@ import {
   getListRecentPostsQueryKey
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Shield, ShieldAlert, AlertCircle, Edit, Trash2, Pin, Plus, Users, Folder, MessageSquare, Info, Ban, ShieldCheck } from "lucide-react";
+import { Shield, Edit, Trash2, Pin, Plus, Users, Folder, MessageSquare, Info, Ban, ShieldCheck, Flag, KeyRound } from "lucide-react";
+import { RepliesTab } from "./RepliesTab";
+import { ReportsTab, useReports } from "./ReportsTab";
+import { Pager } from "@/components/Pager";
+import { CATEGORY_ICONS, CategoryIcon } from "@/lib/categoryIcons";
 import { useToast } from "@/hooks/use-toast";
 import { formatDate } from "@/lib/date";
 import { apiFetch } from "@/lib/api";
@@ -52,8 +56,18 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
+const TABS = ["users", "categories", "posts", "replies", "reports"];
+
+/** ?tab=reports (e.g. from a report notification) opens that tab. */
+function initialTab(): string {
+  const tab = new URLSearchParams(window.location.search).get("tab");
+  return tab && TABS.includes(tab) ? tab : "users";
+}
+
 export default function AdminPanel() {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
+  const isAdmin = !!user?.isAdmin;
+  const { data: openReports } = useReports("open", isAdmin);
 
   if (authLoading) {
     return (
@@ -82,8 +96,8 @@ export default function AdminPanel() {
         </div>
       </div>
 
-      <Tabs defaultValue="users" className="w-full">
-        <TabsList className="grid grid-cols-4 mb-8">
+      <Tabs defaultValue={initialTab()} className="w-full">
+        <TabsList className="grid grid-cols-5 mb-8">
           <TabsTrigger value="users" className="flex items-center gap-2">
             <Users className="h-4 w-4" /> <span className="hidden sm:inline">İstifadəçilər</span>
           </TabsTrigger>
@@ -95,6 +109,12 @@ export default function AdminPanel() {
           </TabsTrigger>
           <TabsTrigger value="replies" className="flex items-center gap-2">
             <Info className="h-4 w-4" /> <span className="hidden sm:inline">Cavablar</span>
+          </TabsTrigger>
+          <TabsTrigger value="reports" className="flex items-center gap-2">
+            <Flag className="h-4 w-4" /> <span className="hidden sm:inline">Şikayətlər</span>
+            {(openReports?.openCount ?? 0) > 0 && (
+              <Badge variant="destructive" className="h-5 px-1.5">{openReports!.openCount}</Badge>
+            )}
           </TabsTrigger>
         </TabsList>
 
@@ -111,15 +131,11 @@ export default function AdminPanel() {
         </TabsContent>
         
         <TabsContent value="replies" className="mt-0">
-          <div className="bg-white rounded-lg border shadow-sm p-12 flex flex-col items-center justify-center text-center">
-            <div className="bg-slate-100 p-4 rounded-full mb-4">
-              <Info className="h-8 w-8 text-slate-400" />
-            </div>
-            <h3 className="text-lg font-medium text-slate-900 mb-2">Cavabların İdarəedilməsi</h3>
-            <p className="text-slate-500 max-w-md">
-              Mərkəzləşdirilmiş cavab idarəetməsi hazırda dəstəklənmir. Cavabları və şərhləri birbaşa müvafiq mövzu səhifəsindən silə bilərsiniz.
-            </p>
-          </div>
+          <RepliesTab />
+        </TabsContent>
+
+        <TabsContent value="reports" className="mt-0">
+          <ReportsTab />
         </TabsContent>
       </Tabs>
     </div>
@@ -142,10 +158,23 @@ function UsersTab() {
           description: currentStatus ? "Admin səlahiyyəti alındı" : "Admin səlahiyyəti verildi",
         });
       },
-      onError: () => {
-        toast({ variant: "destructive", title: "Xəta", description: "Əməliyyat zamanı xəta baş verdi." });
+      onError: (err) => {
+        const message = (err as { data?: { error?: string } })?.data?.error;
+        toast({ variant: "destructive", title: "Xəta", description: message ?? "Əməliyyat zamanı xəta baş verdi." });
       }
     });
+  };
+
+  const [tempPassword, setTempPassword] = useState<{ username: string; password: string } | null>(null);
+  const handleResetPassword = async (id: string, username: string) => {
+    try {
+      const res = await apiFetch(`/api/admin/users/${id}/reset-password`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) setTempPassword({ username, password: data.temporaryPassword });
+      else toast({ variant: "destructive", title: "Xəta", description: data.error ?? "Şifrə sıfırlanmadı" });
+    } catch {
+      toast({ variant: "destructive", title: "Şəbəkə xətası" });
+    }
   };
 
   const handleToggleBan = async (id: string, currentBanned: boolean) => {
@@ -250,6 +279,25 @@ function UsersTab() {
                       </AlertDialogContent>
                     </AlertDialog>
                   )}
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="ghost" size="sm" title="Şifrəni sıfırla">
+                        <KeyRound className="h-4 w-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Şifrəni sıfırlamaq?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          @{u.username ?? u.id} üçün yeni müvəqqəti şifrə yaradılacaq və bütün cihazlarda çıxış ediləcək.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Ləğv et</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => handleResetPassword(u.id, u.username ?? u.id)}>Sıfırla</AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </div>
               </TableCell>
             </TableRow>
@@ -263,6 +311,22 @@ function UsersTab() {
           )}
         </TableBody>
       </Table>
+
+      <Dialog open={!!tempPassword} onOpenChange={(open) => !open && setTempPassword(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Müvəqqəti şifrə</DialogTitle>
+            <DialogDescription>
+              Bu şifrəni @{tempPassword?.username} istifadəçisinə təhlükəsiz yolla çatdırın. Bir daha göstərilməyəcək; istifadəçi girişdən sonra Ayarlarda dəyişməlidir.
+            </DialogDescription>
+          </DialogHeader>
+          <code className="block text-center text-lg font-mono bg-muted rounded-lg p-3 select-all">{tempPassword?.password}</code>
+          <DialogFooter>
+            <Button onClick={() => navigator.clipboard?.writeText(tempPassword?.password ?? "")} variant="outline">Kopyala</Button>
+            <Button onClick={() => setTempPassword(null)}>Bağla</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -282,17 +346,39 @@ function CategoriesTab() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [slug, setSlug] = useState("");
+  const [icon, setIcon] = useState("");
+  const [moveTo, setMoveTo] = useState("");
 
   const resetForm = () => {
     setName("");
     setDescription("");
     setSlug("");
+    setIcon("");
     setEditingId(null);
   };
 
+  const iconField = (
+    <div className="space-y-2">
+      <label className="text-sm font-medium">İkon</label>
+      <div className="flex items-center gap-3">
+        <select
+          value={icon}
+          onChange={(e) => setIcon(e.target.value)}
+          className="flex-1 h-9 rounded-md border bg-background px-3 text-sm"
+        >
+          <option value="">Avtomatik</option>
+          {Object.entries(CATEGORY_ICONS).map(([key, { label }]) => (
+            <option key={key} value={key}>{label}</option>
+          ))}
+        </select>
+        <CategoryIcon icon={icon} slug={slug} />
+      </div>
+    </div>
+  );
+
   const handleCreate = () => {
     if (!name || !slug) return;
-    createCategory.mutate({ data: { name, description, slug } }, {
+    createCategory.mutate({ data: { name, description, slug, icon } }, {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() });
         setIsCreateOpen(false);
@@ -305,7 +391,7 @@ function CategoriesTab() {
 
   const handleUpdate = () => {
     if (!editingId || !name || !slug) return;
-    updateCategory.mutate({ id: editingId, data: { name, description, slug } }, {
+    updateCategory.mutate({ id: editingId, data: { name, description, slug, icon } }, {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() });
         resetForm();
@@ -315,21 +401,36 @@ function CategoriesTab() {
     });
   };
 
-  const handleDelete = (id: number) => {
-    deleteCategory.mutate({ id }, {
-      onSuccess: () => {
+  // A category with topics needs a target to move them to (the server refuses otherwise).
+  const handleDelete = async (id: number, postCount: number) => {
+    if (postCount > 0 && !moveTo) {
+      toast({ variant: "destructive", title: "Mövzuların köçürüləcəyi kateqoriyanı seçin" });
+      return;
+    }
+    try {
+      const query = postCount > 0 ? `?moveTo=${moveTo}` : "";
+      const res = await apiFetch(`/api/categories/${id}${query}`, { method: "DELETE" });
+      if (res.ok) {
         queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getListPostsQueryKey() });
         toast({ title: "Kateqoriya silindi" });
-      },
-      onError: () => toast({ variant: "destructive", title: "Xəta baş verdi. Bəlkə bu kateqoriyaya aid mövzular var." })
-    });
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast({ variant: "destructive", title: "Silinmədi", description: data.error ?? "Xəta baş verdi" });
+      }
+    } catch {
+      toast({ variant: "destructive", title: "Şəbəkə xətası" });
+    } finally {
+      setMoveTo("");
+    }
   };
 
-  const openEdit = (cat: any) => {
+  const openEdit = (cat: { id: number; name: string; description?: string; slug: string; icon?: string | null }) => {
     setEditingId(cat.id);
     setName(cat.name);
     setDescription(cat.description || "");
     setSlug(cat.slug);
+    setIcon(cat.icon ?? "");
   };
 
   if (isLoading) return <TableSkeleton />;
@@ -366,6 +467,7 @@ function CategoriesTab() {
                 <label className="text-sm font-medium">Açıqlama</label>
                 <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Bu bölmə nə haqqındadır?" />
               </div>
+              {iconField}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Ləğv et</Button>
@@ -389,7 +491,11 @@ function CategoriesTab() {
           <TableBody>
             {categories?.map((cat) => (
               <TableRow key={cat.id}>
-                <TableCell className="font-medium">{cat.name}</TableCell>
+                <TableCell className="font-medium">
+                  <span className="flex items-center gap-2">
+                    <CategoryIcon icon={cat.icon} slug={cat.slug} className="h-4 w-4 text-primary" /> {cat.name}
+                  </span>
+                </TableCell>
                 <TableCell><Badge variant="outline">{cat.slug}</Badge></TableCell>
                 <TableCell className="text-muted-foreground text-sm">{cat.description}</TableCell>
                 <TableCell className="text-center font-medium">{cat.postCount}</TableCell>
@@ -420,6 +526,7 @@ function CategoriesTab() {
                             <label className="text-sm font-medium">Açıqlama</label>
                             <Textarea value={description} onChange={e => setDescription(e.target.value)} />
                           </div>
+                          {iconField}
                         </div>
                         <DialogFooter>
                           <Button variant="outline" onClick={() => resetForm()}>Ləğv et</Button>
@@ -428,7 +535,7 @@ function CategoriesTab() {
                       </DialogContent>
                     </Dialog>
 
-                    <AlertDialog>
+                    <AlertDialog onOpenChange={(open) => !open && setMoveTo("")}>
                       <AlertDialogTrigger asChild>
                         <Button variant="ghost" size="icon">
                           <Trash2 className="h-4 w-4 text-destructive" />
@@ -436,15 +543,30 @@ function CategoriesTab() {
                       </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
-                          <AlertDialogTitle>Əminsiniz?</AlertDialogTitle>
+                          <AlertDialogTitle>"{cat.name}" silinsin?</AlertDialogTitle>
                           <AlertDialogDescription>
-                            Bu kateqoriyanı silmək istədiyinizdən əminsiniz? Bu əməliyyat geri qaytarıla bilməz.
+                            {cat.postCount > 0
+                              ? `Bu kateqoriyada ${cat.postCount} mövzu var. Onlar seçdiyiniz kateqoriyaya köçürüləcək, sonra kateqoriya silinəcək.`
+                              : "Bu kateqoriya silinəcək. Bu əməliyyat geri qaytarıla bilməz."}
                           </AlertDialogDescription>
                         </AlertDialogHeader>
+                        {cat.postCount > 0 && (
+                          <select
+                            value={moveTo}
+                            onChange={(e) => setMoveTo(e.target.value)}
+                            className="h-9 rounded-md border bg-background px-3 text-sm"
+                            aria-label="Mövzuların köçürüləcəyi kateqoriya"
+                          >
+                            <option value="">Köçürüləcək kateqoriyanı seçin...</option>
+                            {categories?.filter((c) => c.id !== cat.id).map((c) => (
+                              <option key={c.id} value={c.id}>{c.name}</option>
+                            ))}
+                          </select>
+                        )}
                         <AlertDialogFooter>
                           <AlertDialogCancel>Ləğv et</AlertDialogCancel>
-                          <AlertDialogAction 
-                            onClick={() => handleDelete(cat.id)}
+                          <AlertDialogAction
+                            onClick={() => handleDelete(cat.id, cat.postCount)}
                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                           >
                             Sil
@@ -470,12 +592,37 @@ function CategoriesTab() {
   );
 }
 
+const POSTS_PAGE_SIZE = 50;
+
 function PostsTab() {
-  const { data: postsData, isLoading } = useListPosts({ page: 1, limit: 50 });
+  const [page, setPage] = useState(1);
+  const listParams = { page, limit: POSTS_PAGE_SIZE };
+  const { data: postsData, isLoading } = useListPosts(listParams, { query: { queryKey: getListPostsQueryKey(listParams) } });
   const updatePost = useUpdatePost();
   const deletePost = useDeletePost();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [editing, setEditing] = useState<{ id: number; title: string; content: string } | null>(null);
+
+  const handleSaveEdit = () => {
+    if (!editing) return;
+    if (editing.title.trim().length < 3 || editing.content.trim().length < 10) {
+      toast({ variant: "destructive", title: "Başlıq ən azı 3, mətn ən azı 10 simvol olmalıdır" });
+      return;
+    }
+    updatePost.mutate(
+      { id: editing.id, data: { title: editing.title.trim(), content: editing.content } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListPostsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getListRecentPostsQueryKey() });
+          setEditing(null);
+          toast({ title: "Mövzu yeniləndi" });
+        },
+        onError: () => toast({ variant: "destructive", title: "Xəta baş verdi" }),
+      },
+    );
+  };
 
   const handleTogglePin = (id: number, currentPinned: boolean) => {
     updatePost.mutate({ id, data: { isPinned: !currentPinned } }, {
@@ -544,7 +691,16 @@ function PostsTab() {
                   >
                     <Pin className="h-4 w-4" />
                   </Button>
-                  
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEditing({ id: post.id, title: post.title, content: post.content })}
+                    title="Redaktə et"
+                  >
+                    <Edit className="h-4 w-4 text-blue-600" />
+                  </Button>
+
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <Button variant="outline" size="sm" className="border-destructive/30 text-destructive hover:bg-destructive/10">
@@ -582,6 +738,34 @@ function PostsTab() {
           )}
         </TableBody>
       </Table>
+      {postsData && (
+        <div className="pb-3">
+          <Pager page={page} limit={POSTS_PAGE_SIZE} total={postsData.total} onChange={setPage} />
+        </div>
+      )}
+
+      <Dialog open={!!editing} onOpenChange={(open) => !open && setEditing(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Mövzunu redaktə et</DialogTitle>
+          </DialogHeader>
+          {editing && (
+            <div className="space-y-3">
+              <Input value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} maxLength={200} />
+              <Textarea
+                value={editing.content}
+                onChange={(e) => setEditing({ ...editing, content: e.target.value })}
+                className="min-h-[220px]"
+                maxLength={20000}
+              />
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditing(null)}>Ləğv et</Button>
+            <Button onClick={handleSaveEdit} disabled={updatePost.isPending}>Yadda saxla</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

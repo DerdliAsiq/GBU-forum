@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "wouter";
-import { GraduationCap, LogOut, Shield, Settings } from "lucide-react";
+import { GraduationCap, LogOut, Shield, Settings, Search, User } from "lucide-react";
 import { loginPath, useAuth } from "@/lib/auth";
 import { NotificationBell } from "./NotificationBell";
 import { Button } from "@/components/ui/button";
@@ -59,6 +59,15 @@ export function ForumLayout({ children }: { children: React.ReactNode }) {
             </Link>
 
             <Link
+              href="/axtaris"
+              aria-label="Axtarış"
+              className="flex items-center justify-center rounded-full transition-colors hover:bg-white/20"
+              style={{ width: 36, height: 36 }}
+            >
+              <Search className="h-5 w-5 text-white" />
+            </Link>
+
+            <Link
               href={isAuthenticated ? "/new-post" : loginPath("/new-post")}
               className="text-sm font-bold px-4 py-2 rounded-lg transition-all hover:shadow-md"
               style={{
@@ -112,6 +121,14 @@ export function ForumLayout({ children }: { children: React.ReactNode }) {
                       </div>
                     </div>
                     <div className="h-px bg-border my-1" />
+                    {user?.username && (
+                      <Link href={`/istifadeci/${encodeURIComponent(user.username)}`}>
+                        <DropdownMenuItem className="cursor-pointer">
+                          <User className="mr-2 h-4 w-4" />
+                          <span>Profilim</span>
+                        </DropdownMenuItem>
+                      </Link>
+                    )}
                     <Link href="/settings">
                       <DropdownMenuItem className="cursor-pointer">
                         <Settings className="mr-2 h-4 w-4" />

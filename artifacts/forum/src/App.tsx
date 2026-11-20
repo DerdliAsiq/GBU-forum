@@ -11,6 +11,8 @@ import AdminPanel from "@/pages/admin/AdminPanel";
 import Login from "@/pages/Login";
 import Settings from "@/pages/Settings";
 import NotFound from "@/pages/not-found";
+import Search from "@/pages/Search";
+import Profile from "@/pages/Profile";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -34,6 +36,8 @@ function Router() {
             <Route path="/new-post" component={NewPost} />
             <Route path="/admin" component={AdminPanel} />
             <Route path="/settings" component={Settings} />
+            <Route path="/axtaris" component={Search} />
+            <Route path="/istifadeci/:username" component={Profile} />
             <Route component={NotFound} />
           </Switch>
         </ForumLayout>

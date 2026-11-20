@@ -1,17 +1,9 @@
 import { useGetStats, useListCategories, useListRecentPosts } from "@workspace/api-client-react";
 import { Link } from "wouter";
-import { MessageSquare, Users, Folder, Clock, Pin, Eye, MessageCircle, BookOpen, Building2, Megaphone, Briefcase, HelpCircle } from "lucide-react";
+import { MessageSquare, Users, Folder, Clock, Pin, Eye, MessageCircle } from "lucide-react";
 import { formatDate } from "@/lib/date";
 import { Skeleton } from "@/components/ui/skeleton";
-
-const CATEGORY_ICONS: Record<string, React.ReactNode> = {
-  "tedris-imtahanlar": <BookOpen className="h-5 w-5 text-primary" />,
-  "kampus-heyati": <Building2 className="h-5 w-5 text-primary" />,
-  "elanlar-xeberler": <Megaphone className="h-5 w-5 text-primary" />,
-  "pese-inkisaf": <Briefcase className="h-5 w-5 text-primary" />,
-  "umumi-muzakire": <MessageSquare className="h-5 w-5 text-primary" />,
-  "yardim-sual": <HelpCircle className="h-5 w-5 text-primary" />,
-};
+import { CategoryIcon } from "@/lib/categoryIcons";
 
 export default function Home() {
   const { data: stats, isLoading: statsLoading } = useGetStats();
@@ -102,7 +94,7 @@ export default function Home() {
                         border: "1.5px solid rgba(200,146,42,0.2)",
                       }}
                     >
-                      {CATEGORY_ICONS[cat.slug] ?? <Folder className="h-5 w-5 text-primary" />}
+                      <CategoryIcon icon={cat.icon} slug={cat.slug} />
                     </div>
 
                     {/* Text */}

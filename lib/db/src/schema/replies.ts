@@ -12,6 +12,7 @@ export const repliesTable = pgTable("replies", {
   content: text("content").notNull(),
   authorName: text("author_name").notNull().default("Anonim"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  editedAt: timestamp("edited_at"),
 });
 
 export const insertReplySchema = createInsertSchema(repliesTable).omit({ id: true, createdAt: true });

@@ -13,14 +13,20 @@ router.get("/stats", async (req, res) => {
       db.select({ count: sql<number>`count(*)::int` }).from(postsTable),
       db.select({ count: sql<number>`count(*)::int` }).from(repliesTable),
       db.select({ count: sql<number>`count(*)::int` }).from(categoriesTable),
-      db.select({ count: sql<number>`count(*)::int` }).from(postsTable).where(gte(postsTable.createdAt, today)),
+      // "Active today" = distinct people who opened a topic or replied today.
+      db.execute<{ count: number }>(sql`
+        select count(distinct author_id)::int as count from (
+          select author_id from posts where created_at >= ${today} and author_id is not null
+          union all
+          select author_id from replies where created_at >= ${today} and author_id is not null
+        ) as activity`),
     ]);
 
     res.json({
       totalPosts: postStats[0]?.count ?? 0,
       totalReplies: replyStats[0]?.count ?? 0,
       totalCategories: catStats[0]?.count ?? 0,
-      activeToday: activeStats[0]?.count ?? 0,
+      activeToday: activeStats.rows[0]?.count ?? 0,
     });
   } catch (err) {
     req.log.error({ err }, "Failed to get stats");

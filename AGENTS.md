@@ -28,23 +28,22 @@ Forum app monorepo (pnpm workspaces, Node 24, TypeScript 5.9). Default branch: `
 ## Package boundaries
 - `artifacts/api-server` (`@workspace/api-server`): Express 5 API. Entry `src/index.ts` (requires `PORT`, seeds an admin user on start). Bundled with esbuild via `build.mjs` to `dist/index.mjs`; CJS-only/native deps externalized.
 - `artifacts/forum` (`@workspace/forum`): React 19 + Vite SPA. Entry `src/main.tsx` / `src/App.tsx`; path alias `@` → `src`.
-- `lib/db` (`@workspace/db`): Drizzle ORM schema under `src/schema/`: `auth` (sessions + users), `categories`, `posts`, `replies`.
+- `lib/db` (`@workspace/db`): Drizzle ORM schema under `src/schema/`: `auth` (sessions + users), `categories`, `posts`, `replies`, `postViews`, `notifications`, `reports`.
 - `lib/api-spec` (`@workspace/api-spec`): OpenAPI 3.1 spec `openapi.yaml` + Orval config.
 - `lib/api-zod` (`@workspace/api-zod`): generated Zod schemas (`src/generated/types`).
 - `lib/api-client-react` (`@workspace/api-client-react`): generated react-query client (`src/generated`).
-- `lib/replit-auth-web` — **kullanılmıyor**, Replit OIDC kaldırıldı.
 
 ## Gotchas (agent-relevant)
 - **OpenAPI title is frozen**: `openapi.yaml` `info.title` must stay `"Api"` — Orval derives generated import paths from it.
 - **Don't drop `sessions` / `users` tables**: marked mandatory for Replit Auth in `lib/db/src/schema/auth.ts`.
 - **Don't edit generated files by hand**: `lib/api-client-react/src/generated`, `lib/api-zod/src/generated/types`, and `artifacts/api-server/dist` are regenerated — re-run `codegen` / `build` instead.
 - **Build order matters**: `pnpm run build` runs typecheck first; a type error blocks the build.
-- **No tests exist**: no `*.test.*` / `*.spec.*` files and no test runner configured.
+- **Tests**: `pnpm test` runs Vitest unit tests in `artifacts/api-server/src/**/*.test.ts` (pure modules only — anything importing `@workspace/db` needs `DATABASE_URL`). CI: `.github/workflows/ci.yml`.
 - **`scripts` workspace entry** is declared in `pnpm-workspace.yaml` but no package exists there yet.
 - **README.md is mostly placeholder** ("Populate as you build"); do not trust unverified claims in it.
-- **Replit OIDC auth removed**: `@workspace/replit-auth-web` kaldırıldı. Kimlik doğrulama artık basit session + cookie tabanlı (`/api/auth/local-login`, `/api/auth/register`, `/api/logout`). Frontend `useAuth` hook'u `src/lib/auth.ts`'da.
+- **Replit OIDC auth removed** (paket de silindi). Kimlik doğrulama session + cookie tabanlı (`/api/auth/local-login`, `/api/auth/register`, `POST /api/logout`); sessiyalar DB-də SHA-256 hash ilə saxlanılır. Frontend `useAuth` hook'u `src/lib/auth.ts`'da.
 - **`vite.config.ts`**: `@replit/*` eklentileri kaldırıldı. `PORT` ve `BASE_PATH` build sırasında default değere düşer (`3000` ve `/`).
-- **Render**: `render.yaml` iki servis (API + Frontend) ve PostgreSQL veritabanı tanımlar. `.env.example` gerekli env değişkenlerini listeler.
+- **Render**: `render.yaml` tek web servisi tanımlar (API, derlenmiş frontend'i de sunar); veritabanı Supabase. Env değişkenleri için `CLAUDE.md` → Environment.
 - **`.replit`**: `scripts/post-merge.sh` referansı var ama dosya yok. Render'da kullanılmaz.
 
 ## Pointers

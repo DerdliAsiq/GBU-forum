@@ -37,9 +37,16 @@ async function fetchNotifications(): Promise<NotificationsResponse> {
 
 function describe(n: NotificationItem): string {
   const who = n.actorName ? `@${n.actorName}` : "Bir istifadəçi";
-  return n.type === "reply_to_post"
-    ? `${who} mövzunuza cavab yazdı`
-    : `${who} iştirak etdiyiniz mövzuya cavab yazdı`;
+  switch (n.type) {
+    case "reply_to_post":
+      return `${who} mövzunuza cavab yazdı`;
+    case "mention":
+      return `${who} sizi qeyd etdi`;
+    case "report":
+      return `${who} məzmundan şikayət etdi`;
+    default:
+      return `${who} iştirak etdiyiniz mövzuya cavab yazdı`;
+  }
 }
 
 /** Header bell: unread badge + latest notifications. Only rendered for signed-in users. */
@@ -73,7 +80,8 @@ export function NotificationBell() {
 
   const open = (n: NotificationItem) => {
     if (!n.read) markRead.mutate(n.id);
-    if (n.postId) setLocation(`/post/${n.postId}`);
+    if (n.type === "report") setLocation("/admin?tab=reports");
+    else if (n.postId) setLocation(`/post/${n.postId}${n.replyId ? `#reply-${n.replyId}` : ""}`);
   };
 
   return (

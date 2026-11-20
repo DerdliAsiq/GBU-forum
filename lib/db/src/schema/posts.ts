@@ -17,6 +17,7 @@ export const postsTable = pgTable("posts", {
   viewCount: integer("view_count").notNull().default(0),
   isPinned: boolean("is_pinned").notNull().default(false),
   lastReplyAt: timestamp("last_reply_at"),
+  editedAt: timestamp("edited_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

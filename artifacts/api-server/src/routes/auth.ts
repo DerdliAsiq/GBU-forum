@@ -85,27 +85,6 @@ export async function seedAdminUser() {
 
 const router: IRouter = Router();
 
-function getOrigin(req: Request): string {
-  const proto = req.headers["x-forwarded-proto"] || "https";
-  const host =
-    req.headers["x-forwarded-host"] || req.headers["host"] || "localhost";
-  return `${proto}://${host}`;
-}
-
-function getSafeReturnTo(value: unknown): string {
-  // Only same-site paths. Browsers treat "\" like "/" and drop tabs/newlines,
-  // so "/\evil.com" or "/\t/evil.com" would become "//evil.com".
-  if (
-    typeof value !== "string" ||
-    !value.startsWith("/") ||
-    value.startsWith("//") ||
-    /[\\\u0000-\u001f\u007f]/.test(value)
-  ) {
-    return "/";
-  }
-  return value;
-}
-
 router.get("/auth/user", (req: Request, res: Response) => {
   res.json(
     GetCurrentAuthUserResponse.parse({
@@ -248,11 +227,11 @@ router.post("/auth/register", registerAttemptLimiter, async (req: Request, res: 
   }
 });
 
-router.get("/logout", async (req: Request, res: Response) => {
+// POST only: a GET logout could be triggered by any other site (img tag, link prefetch).
+router.post("/logout", async (req: Request, res: Response) => {
   const sid = getSessionId(req);
   await clearSession(res, sid);
-  const returnTo = getSafeReturnTo(req.query.returnTo);
-  res.redirect(returnTo);
+  res.status(204).send();
 });
 
 export default router;

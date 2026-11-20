@@ -5,8 +5,9 @@ import { repliesTable } from "./replies";
 
 /**
  * In-app notifications. `userId` is the recipient, `actorId` who triggered it.
- * Types: "reply_to_post" (someone replied to your topic) and
- * "reply_in_thread" (someone replied in a topic you also replied to).
+ * Types: "reply_to_post" (someone replied to your topic), "reply_in_thread"
+ * (someone replied in a topic you also replied to), "mention" (@you) and
+ * "report" (admins: content was reported).
  */
 export const notificationsTable = pgTable(
   "notifications",
@@ -25,4 +26,4 @@ export const notificationsTable = pgTable(
   (table) => [index("notifications_user_created_idx").on(table.userId, table.createdAt)],
 );
 
-export type NotificationType = "reply_to_post" | "reply_in_thread";
+export type NotificationType = "reply_to_post" | "reply_in_thread" | "mention" | "report";

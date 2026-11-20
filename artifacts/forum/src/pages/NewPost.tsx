@@ -15,9 +15,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { currentAppPath, loginPath, useAuth } from "@/lib/auth";
 
 const postSchema = z.object({
-  categoryId: z.coerce.number().min(1, "Kategoriya seçilməlidir"),
+  categoryId: z.number().min(1, "Kategoriya seçilməlidir"),
   title: z.string().min(3, "Başlıq çox qısadır").max(200, "Başlıq çox uzundur"),
-  content: z.string().min(10, "Mətn çox qısadır"),
+  content: z.string().min(10, "Mətn çox qısadır").max(20000, "Mətn çox uzundur"),
 });
 
 export default function NewPost() {
@@ -130,7 +130,7 @@ function NewPostForm() {
                     <FormLabel className="text-xs font-bold text-foreground/80 uppercase tracking-wide">Kateqoriya</FormLabel>
                     <Select
                       disabled={categoriesLoading}
-                      onValueChange={field.onChange}
+                      onValueChange={(v) => field.onChange(Number(v))}
                       defaultValue={field.value ? field.value.toString() : ""}
                     >
                       <FormControl>

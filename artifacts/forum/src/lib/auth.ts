@@ -78,9 +78,8 @@ export function useAuth(): AuthState {
   }, []);
 
   const logout = useCallback(() => {
-    // The API's /logout answers with a redirect to a path on *its own* origin,
-    // so call it in the background and navigate within the frontend instead.
-    apiFetch("/api/logout", { redirect: "manual" })
+    // POST (never GET, so other sites can't log users out), then reload at home.
+    apiFetch("/api/logout", { method: "POST" })
       .catch(() => undefined)
       .finally(() => {
         window.location.href = import.meta.env.BASE_URL;

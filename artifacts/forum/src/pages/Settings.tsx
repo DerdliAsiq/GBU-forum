@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 import { Link } from "wouter";
-import { ChevronLeft, Camera, User, Save, Check } from "lucide-react";
+import { ChevronLeft, Camera, User, Save, Check, KeyRound } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -27,16 +27,19 @@ export default function Settings() {
     }
   }, [user]);
 
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      toast({ variant: "destructive", title: "Şəkil çox böyükdür", description: "Maks 2MB" });
+    if (!file.type.startsWith("image/") || file.size > 10 * 1024 * 1024) {
+      toast({ variant: "destructive", title: "Şəkil uyğun deyil", description: "Şəkil faylı seçin (maks. 10MB)" });
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => setAvatarPreview(reader.result as string);
-    reader.readAsDataURL(file);
+    try {
+      setAvatarPreview(await resizeToDataUrl(file, 256));
+    } catch {
+      toast({ variant: "destructive", title: "Şəkil oxunmadı", description: "Başqa şəkil seçin." });
+    }
   };
 
   const handleSave = async () => {
@@ -48,7 +51,8 @@ export default function Settings() {
         body: JSON.stringify({
           displayName: displayName || undefined,
           username: username || undefined,
-          profileImageUrl: avatarPreview ?? undefined,
+          // Only send the avatar when it changed ("" removes it).
+          profileImageUrl: avatarPreview === (user?.profileImageUrl ?? null) ? undefined : (avatarPreview ?? ""),
         }),
       });
 
@@ -138,7 +142,12 @@ export default function Settings() {
               </button>
               <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
             </div>
-            <p className="text-xs text-muted-foreground">JPG, PNG, GIF — Maks. 2MB</p>
+            <p className="text-xs text-muted-foreground">JPG, PNG, WebP — avtomatik kiçildilir</p>
+            {avatarPreview && (
+              <button type="button" onClick={() => setAvatarPreview(null)} className="text-xs text-muted-foreground hover:text-destructive">
+                Şəkli sil
+              </button>
+            )}
           </div>
 
           {/* Fields */}
@@ -160,7 +169,7 @@ export default function Settings() {
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">@</span>
                 <Input
                   value={username}
-                  onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_\-.ğüşıöçĞÜŞİÖÇ]/g, ""))}
+                  onChange={e => setUsername(e.target.value.replace(/[^A-Za-z0-9_\-.ğüşıöçəĞÜŞİÖÇƏ]/g, ""))}
                   placeholder="istifadeci_adi"
                   maxLength={50}
                   className="pl-7"
@@ -194,6 +203,89 @@ export default function Settings() {
           </Button>
         </div>
       </div>
+
+      <PasswordCard />
     </div>
+  );
+}
+
+/** Downscales an image file to at most `size`×`size` and returns a JPEG data URL. */
+function resizeToDataUrl(file: File, size: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, size / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(img.width * scale));
+      canvas.height = Math.max(1, Math.round(img.height * scale));
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return reject(new Error("no canvas"));
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL("image/jpeg", 0.85));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("bad image"));
+    };
+    img.src = url;
+  });
+}
+
+function PasswordCard() {
+  const { toast } = useToast();
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [repeat, setRepeat] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (next.length < 8) {
+      toast({ variant: "destructive", title: "Yeni şifrə ən azı 8 simvol olmalıdır" });
+      return;
+    }
+    if (next !== repeat) {
+      toast({ variant: "destructive", title: "Yeni şifrələr eyni deyil" });
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await apiFetch("/api/profile/password", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword: current, newPassword: next }),
+      });
+      if (res.ok) {
+        setCurrent("");
+        setNext("");
+        setRepeat("");
+        toast({ title: "Şifrə dəyişdirildi", description: "Digər cihazlardakı sessiyalar bağlandı." });
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast({ variant: "destructive", title: "Şifrə dəyişmədi", description: data.error ?? "Yenidən cəhd edin" });
+      }
+    } catch {
+      toast({ variant: "destructive", title: "Şəbəkə xətası" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} className="rounded-xl bg-card p-6 space-y-4" style={{ border: "1.5px solid #EAD9B8" }}>
+      <h2 className="font-bold flex items-center gap-2">
+        <KeyRound className="h-4 w-4 text-primary" /> Şifrəni dəyiş
+      </h2>
+      <Input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} placeholder="Cari şifrə" autoComplete="current-password" required />
+      <Input type="password" value={next} onChange={(e) => setNext(e.target.value)} placeholder="Yeni şifrə (ən azı 8 simvol)" autoComplete="new-password" minLength={8} required />
+      <Input type="password" value={repeat} onChange={(e) => setRepeat(e.target.value)} placeholder="Yeni şifrə (təkrar)" autoComplete="new-password" minLength={8} required />
+      <Button type="submit" disabled={saving} className="w-full font-bold" variant="outline">
+        {saving ? "Dəyişdirilir..." : "Şifrəni dəyiş"}
+      </Button>
+    </form>
   );
 }

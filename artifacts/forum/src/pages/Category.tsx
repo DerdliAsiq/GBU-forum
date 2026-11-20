@@ -4,13 +4,28 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MessageCircle, Eye, Pin, ChevronLeft, PlusCircle } from "lucide-react";
 import { formatDate } from "@/lib/date";
+import { useState } from "react";
+import { Pager, readPageParam } from "@/components/Pager";
+
+const PAGE_SIZE = 20;
 
 export default function Category() {
   const params = useParams();
   const id = Number(params.id);
+  const [page, setPage] = useState(readPageParam);
 
   const { data: category, isLoading: categoryLoading } = useGetCategory(id, { query: { queryKey: getGetCategoryQueryKey(id), enabled: !!id } });
-  const { data: postList, isLoading: postsLoading } = useListPosts({ categoryId: id }, { query: { queryKey: getListPostsQueryKey({ categoryId: id }), enabled: !!id } });
+  const listParams = { categoryId: id, page, limit: PAGE_SIZE };
+  const { data: postList, isLoading: postsLoading } = useListPosts(listParams, { query: { queryKey: getListPostsQueryKey(listParams), enabled: !!id } });
+
+  const goToPage = (p: number) => {
+    setPage(p);
+    const url = new URL(window.location.href);
+    if (p > 1) url.searchParams.set("page", String(p));
+    else url.searchParams.delete("page");
+    window.history.replaceState(null, "", url);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   if (categoryLoading) {
     return (
@@ -140,6 +155,7 @@ export default function Category() {
             </Link>
           ))
         )}
+        {postList && <Pager page={page} limit={PAGE_SIZE} total={postList.total} onChange={goToPage} />}
       </div>
     </div>
   );

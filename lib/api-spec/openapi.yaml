@@ -11,7 +11,7 @@ tags:
   - name: health
     description: Health operations
   - name: Auth
-    description: Browser and mobile authentication endpoints.
+    description: Session authentication endpoints.
   - name: categories
     description: Forum categories
   - name: posts
@@ -52,110 +52,17 @@ paths:
               schema:
                 $ref: '#/components/schemas/AuthUserEnvelope'
 
-  /login:
-    get:
-      tags: [Auth]
-      operationId: beginBrowserLogin
-      summary: Start the browser OIDC login flow
-      parameters:
-        - name: returnTo
-          in: query
-          required: false
-          schema:
-            type: string
-      responses:
-        '302':
-          description: Redirect to the OIDC authorization endpoint.
-
-  /callback:
-    get:
-      tags: [Auth]
-      operationId: handleBrowserLoginCallback
-      summary: Complete the browser OIDC login flow
-      parameters:
-        - name: code
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: state
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: iss
-          in: query
-          required: false
-          schema:
-            type: string
-            format: uri
-      responses:
-        '302':
-          description: Redirect to the returnTo path on success.
-
   /logout:
-    get:
+    post:
       tags: [Auth]
       operationId: logoutBrowserSession
-      summary: Clear the session and begin OIDC logout
+      summary: End the current session (POST so it cannot be triggered cross-site)
       parameters:
         - $ref: '#/components/parameters/AuthorizationSessionHeader'
         - $ref: '#/components/parameters/SessionCookie'
       responses:
-        '302':
-          description: Redirect to the OIDC provider logout URL.
-
-  /mobile-auth/token-exchange:
-    post:
-      tags: [Auth]
-      operationId: exchangeMobileAuthorizationCode
-      summary: Exchange a mobile OIDC code for a session token
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/MobileTokenExchangeRequest'
-      responses:
-        '200':
-          description: Session created successfully.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MobileTokenExchangeSuccess'
-        '400':
-          description: Missing or invalid required fields.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '401':
-          description: Token did not contain usable claims.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-        '500':
-          description: Token exchange failed.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-
-  /mobile-auth/logout:
-    post:
-      tags: [Auth]
-      operationId: logoutMobileSession
-      summary: Delete a mobile session token
-      parameters:
-        - $ref: '#/components/parameters/AuthorizationSessionHeader'
-      responses:
-        '200':
-          description: Logout processed.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/LogoutSuccess'
+        '204':
+          description: Session cleared.
 
   /categories:
     get:
@@ -341,8 +248,8 @@ paths:
           description: Not found
     patch:
       operationId: updatePost
-      tags: [admin]
-      summary: Update a post (admin — pin/unpin, etc.)
+      tags: [posts]
+      summary: Update a post (author may edit title/content; only admins may pin)
       parameters:
         - name: id
           in: path
@@ -368,8 +275,8 @@ paths:
           description: Not found
     delete:
       operationId: deletePost
-      tags: [admin]
-      summary: Delete a post (admin only)
+      tags: [posts]
+      summary: Delete a post (its author or an admin)
       parameters:
         - name: id
           in: path
@@ -407,7 +314,7 @@ paths:
     post:
       operationId: createReply
       tags: [replies]
-      summary: Add a reply to a post (anonymous)
+      summary: Add a reply to a post (signed-in users)
       parameters:
         - name: id
           in: path
@@ -433,10 +340,37 @@ paths:
           description: Post not found
 
   /replies/{id}:
+    patch:
+      operationId: updateReply
+      tags: [replies]
+      summary: Edit a reply (its author or an admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReplyPatch"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Reply"
+        "403":
+          description: Forbidden
+        "404":
+          description: Not found
     delete:
       operationId: deleteReply
-      tags: [admin]
-      summary: Delete a reply (admin only)
+      tags: [replies]
+      summary: Delete a reply (its author or an admin)
       parameters:
         - name: id
           in: path
@@ -561,32 +495,6 @@ components:
           oneOf:
             - $ref: '#/components/schemas/AuthUser'
             - type: 'null'
-    MobileTokenExchangeRequest:
-      type: object
-      required: [code, code_verifier, redirect_uri, state]
-      properties:
-        code:
-          type: string
-          minLength: 1
-        code_verifier:
-          type: string
-          minLength: 1
-        redirect_uri:
-          type: string
-          minLength: 1
-          format: uri
-        state:
-          type: string
-          minLength: 1
-        nonce:
-          type: string
-          minLength: 1
-    MobileTokenExchangeSuccess:
-      type: object
-      required: [token]
-      properties:
-        token:
-          type: string
     LogoutSuccess:
       type: object
       required: [success]
@@ -663,6 +571,12 @@ components:
           type: boolean
         lastReplyAt:
           type: ["string", "null"]
+        authorId:
+          description: Id of the author's account (null if the account was deleted).
+          type: ["string", "null"]
+        editedAt:
+          description: Set when the author or an admin edited the title/content.
+          type: ["string", "null"]
 
     PostList:
       type: object
@@ -692,7 +606,9 @@ components:
         content:
           type: string
           minLength: 10
+          maxLength: 20000
         authorName:
+          description: Ignored — topics are signed with the account's username.
           type: string
           maxLength: 50
 
@@ -700,11 +616,16 @@ components:
       type: object
       properties:
         isPinned:
+          description: Admins only.
           type: boolean
         title:
           type: string
+          minLength: 3
+          maxLength: 200
         content:
           type: string
+          minLength: 10
+          maxLength: 20000
 
     Reply:
       type: object
@@ -721,6 +642,11 @@ components:
         createdAt:
           type: string
           format: date-time
+        authorId:
+          description: Id of the author's account (null if the account was deleted).
+          type: ["string", "null"]
+        editedAt:
+          type: ["string", "null"]
 
     ReplyInput:
       type: object
@@ -729,9 +655,20 @@ components:
         content:
           type: string
           minLength: 2
+          maxLength: 5000
         authorName:
+          description: Ignored — replies are signed with the account's username.
           type: string
           maxLength: 50
+
+    ReplyPatch:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+          minLength: 2
+          maxLength: 5000
 
     ForumStats:
       type: object
