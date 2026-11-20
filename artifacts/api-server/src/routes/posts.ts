@@ -3,6 +3,7 @@ import { db, postsTable, categoriesTable, usersTable } from "@workspace/db";
 import { CreatePostBody } from "@workspace/api-zod";
 import { eq, desc, sql } from "drizzle-orm";
 import { rateLimit } from "../lib/rateLimit";
+import { recordPostView } from "../lib/postViews";
 
 const router = Router();
 
@@ -196,12 +197,12 @@ router.get("/posts/:id", async (req, res) => {
 
     if (!row) return res.status(404).json({ error: "Not found" });
 
-    await db.update(postsTable)
-      .set({ viewCount: sql`${postsTable.viewCount} + 1` })
-      .where(eq(postsTable.id, id));
+    // Once per viewer per day; refreshes and re-fetches don't inflate the count.
+    const counted = await recordPostView(req, id);
 
     res.json({
       ...row,
+      viewCount: row.viewCount + (counted ? 1 : 0),
       createdAt: row.createdAt.toISOString(),
       lastReplyAt: row.lastReplyAt ? row.lastReplyAt.toISOString() : null,
     });
